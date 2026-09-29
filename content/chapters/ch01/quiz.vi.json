@@ -1,0 +1,41 @@
+{
+  "id": "ch01",
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "Muốn một pane chạy Python thay vì toolchain mặc định, khai báo ở đâu?",
+      "choices": [
+        "Trường `toolchain` của pane trong exercises.json",
+        "Đổi `default_locale` trong course.json",
+        "Đặt tên file section kết thúc bằng .py",
+        "Thêm cờ --python khi chạy binary"
+      ],
+      "answer": 0,
+      "explanation": "Mỗi pane có trường `toolchain` riêng; bỏ trống thì dùng `default_toolchain` của course.json, hoặc suy ra từ đuôi file entry."
+    },
+    {
+      "id": "q2",
+      "prompt": "Section id có vai trò gì ngoài định danh trong URL?",
+      "choices": [
+        "Quyết định thứ tự sắp xếp sidebar",
+        "Là khóa lưu tiến độ của người học",
+        "Chọn ngôn ngữ hiển thị mặc định",
+        "Đặt tên file binary khi build"
+      ],
+      "answer": 1,
+      "explanation": "Tiến độ lưu theo khóa `chNN/<section-id>` trong SQLite — đổi id là người học mất tiến độ, nên không bao giờ đổi tên sau khi phát hành."
+    },
+    {
+      "id": "q3",
+      "prompt": "File nội dung song ngữ được tổ chức thế nào?",
+      "choices": [
+        "Một file duy nhất chứa cả hai ngôn ngữ",
+        "Thư mục vi/ và en/ tách riêng hoàn toàn",
+        "Mỗi nội dung một cặp file .vi.* và .en.*",
+        "Ngôn ngữ thứ hai dịch tự động lúc chạy"
+      ],
+      "answer": 2,
+      "explanation": "Quy ước `.<lang>.md` / `.<lang>.json` cạnh nhau; server tự fallback theo thứ tự locales khai báo trong course.json."
+    }
+  ]
+}

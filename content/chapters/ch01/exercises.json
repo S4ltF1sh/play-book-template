@@ -1,0 +1,30 @@
+[
+  {
+    "id": "hello-playground",
+    "title": { "vi": "Hello, Playground", "en": "Hello, Playground" },
+    "brief": {
+      "vi": "Hai pane, hai toolchain khác nhau chạy cạnh nhau: Python bên trái, C bên phải. Bài này cho bạn cảm giác về vòng lặp sửa code → Run → checks tick.",
+      "en": "Two panes, two different toolchains side by side: Python on the left, C on the right. This exercise gives you a feel for the edit → Run → checks-tick loop."
+    },
+    "tasks": {
+      "vi": "- Bấm Run ở pane **C** — chương trình được biên dịch và chạy ngay trên máy bạn\n- Bấm Run ở pane **Python** — để ý ô `args:` đang truyền `Playbook`\n- Sửa `greet.py`: dùng `sys.argv[1]` thay cho tên cố định, chạy lại để lời chào khớp args\n- **Phá thử**: xóa chữ `Playbook` trong ô args rồi Run — lời chào rơi về `world`; sau đó chạy lại với `Playbook` để check xanh trở lại",
+      "en": "- Hit Run on the **C** pane — the program is compiled and run right on your machine\n- Hit Run on the **Python** pane — note the `args:` box passing `Playbook`\n- Edit `greet.py`: use `sys.argv[1]` instead of the hardcoded name, rerun so the greeting matches the args\n- **Break it**: clear `Playbook` from the args box and Run — the greeting falls back to `world` (then rerun with `Playbook` to turn the check green!)"
+    },
+    "panes": [
+      { "name": { "vi": "Python", "en": "Python" }, "files": ["greet.py"], "toolchain": "python", "default_args": "Playbook" },
+      { "name": { "vi": "C", "en": "C" }, "files": ["hello.c"], "toolchain": "c", "default_args": "" }
+    ],
+    "solution": {
+      "notes": {
+        "vi": "Ý chính: `sys.argv` là danh sách tham số dòng lệnh, phần tử 0 là tên script — tham số thật bắt đầu từ chỉ số 1; nhớ kiểm tra độ dài trước khi đọc kẻo IndexError. Nếu cách giải của bạn chạy đúng mà auto-grader không nhận, nút \"Dùng đáp án & đánh dấu hoàn thành\" bên dưới sẽ mở khóa section.",
+        "en": "Key idea: `sys.argv` is the list of command-line arguments, element 0 being the script name — real arguments start at index 1; check the length before reading to avoid an IndexError. If your own working approach isn't recognized by the auto-grader, the \"Use solution & mark as done\" button below unlocks the section."
+      },
+      "files": ["greet.py"]
+    },
+    "checks": [
+      { "pane": 1, "pattern": "hello from C \\(compiled locally\\)", "label": { "vi": "Pane C biên dịch và chạy được", "en": "The C pane compiles and runs" } },
+      { "pane": 0, "pattern": "hello, Playbook!", "label": { "vi": "Python chào đúng tên truyền qua args", "en": "Python greets the name passed via args" } },
+      { "pane": 0, "pattern": "python says: 2 \\+ 3 = 5", "label": { "vi": "Dòng tính toán vẫn in ra sau khi sửa", "en": "The arithmetic line still prints after your edit" } }
+    ]
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "id": "template-basics",
+  "questions": [
+    {
+      "id": "m1",
+      "prompt": "When does an exercise section unlock the next section?",
+      "choices": [
+        "When you click the Mark as done button",
+        "When every auto-graded criterion passes",
+        "When the code compiles without warnings",
+        "When you open the sample solution"
+      ],
+      "answer": 1,
+      "explanation": "Exercises gate on checks: regexes graded against each pane's output; when all pass, the section is marked done automatically."
+    },
+    {
+      "id": "m2",
+      "prompt": "How do the two playground panes run relative to each other?",
+      "choices": [
+        "Pane B only runs after pane A exits",
+        "One shared process, split into two windows",
+        "Fully independently, one process per pane",
+        "Pane A is the editor; only pane B runs code"
+      ],
+      "answer": 2,
+      "explanation": "Each pane has its own WebSocket and process — which is exactly why a client/server pair can talk over localhost."
+    }
+  ]
+}

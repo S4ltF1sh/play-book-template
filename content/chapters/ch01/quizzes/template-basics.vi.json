@@ -1,0 +1,29 @@
+{
+  "id": "template-basics",
+  "questions": [
+    {
+      "id": "m1",
+      "prompt": "Một section bài tập được mở khóa (unlock bài kế tiếp) khi nào?",
+      "choices": [
+        "Khi bấm nút Đánh dấu đã học",
+        "Khi mọi tiêu chí chấm tự động cùng pass",
+        "Khi code biên dịch không có warning",
+        "Khi đã mở xem đáp án mẫu"
+      ],
+      "answer": 1,
+      "explanation": "Bài tập gate theo checks: regex chấm trên output của từng pane, tất cả pass thì section được đánh dấu done tự động."
+    },
+    {
+      "id": "m2",
+      "prompt": "Hai pane của playground chạy với nhau như thế nào?",
+      "choices": [
+        "Pane B chỉ chạy khi pane A thoát",
+        "Chung một process, chia hai cửa sổ",
+        "Độc lập hoàn toàn, mỗi pane một process",
+        "Pane A là editor, pane B mới chạy code"
+      ],
+      "answer": 2,
+      "explanation": "Mỗi pane có WebSocket + process riêng — vì thế mô phỏng được client/server nói chuyện với nhau qua localhost."
+    }
+  ]
+}
