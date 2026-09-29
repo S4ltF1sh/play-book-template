@@ -4,6 +4,9 @@ A plug-and-play shell for building **interactive learning playbooks**: a single 
 
 **Why it exists:** turning a good text (a guide, a book, your own notes) into a Codecademy-style course normally means building an app. This template already *is* the app — you (or a content-generating agent) supply only the `content/` directory, and everything else — layout, navigation, language switching, progress tracking, gating, auto-grading — just works.
 
+![The demo exercise: chapter navigation drawer, content and tasks, and a Python pane plus a C pane running side by side with all auto-graded checks passing](docs/demo.png)
+*The shipped demo chapter: navigation drawer with progress, content + tasks in the middle, and Python & C panes compiled & run locally on the right — auto-graded checks all green.*
+
 ## Table of contents
 
 - [Features](#features)
