@@ -1,0 +1,41 @@
+{
+  "id": "ch01",
+  "questions": [
+    {
+      "id": "q1",
+      "prompt": "Where do you declare that a pane should run Python instead of the default toolchain?",
+      "choices": [
+        "The pane's `toolchain` field in exercises.json",
+        "Change `default_locale` in course.json",
+        "Name the section file with a .py suffix",
+        "Pass a --python flag to the binary"
+      ],
+      "answer": 0,
+      "explanation": "Each pane has its own `toolchain` field; leave it empty to use course.json's `default_toolchain`, or let the runner infer it from the entry file's extension."
+    },
+    {
+      "id": "q2",
+      "prompt": "What role does a section id play beyond identifying the URL?",
+      "choices": [
+        "It decides the sidebar sort order",
+        "It is the learner's progress key",
+        "It selects the default display language",
+        "It names the binary at build time"
+      ],
+      "answer": 1,
+      "explanation": "Progress is stored under `chNN/<section-id>` in SQLite — renaming an id loses the learner's progress, so never rename after shipping."
+    },
+    {
+      "id": "q3",
+      "prompt": "How are bilingual content files organized?",
+      "choices": [
+        "A single file holding both languages",
+        "Fully separate vi/ and en/ directories",
+        "One .vi.* / .en.* file pair per piece of content",
+        "The second language is machine-translated at runtime"
+      ],
+      "answer": 2,
+      "explanation": "The `.<lang>.md` / `.<lang>.json` convention keeps pairs side by side; the server falls back through the locales listed in course.json."
+    }
+  ]
+}

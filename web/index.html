@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playbook</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/vendor/highlight.css">
+<link rel="stylesheet" href="/vendor/codemirror.min.css">
+<link rel="stylesheet" href="/vendor/material-darker.min.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <button id="toc-toggle" title="Mục lục">☰</button>
+    <a class="brand-mini" href="#/" id="brand">⚡ <b>Playbook</b></a>
+    <span class="grow"></span>
+    <span id="overall-progress"></span>
+    <button id="play-toggle" hidden>🧪</button>
+    <select id="lang-sel" title="Ngôn ngữ"></select>
+  </header>
+  <div id="body">
+    <div id="drawer-scrim"></div>
+    <aside id="sidebar">
+      <nav id="toc"></nav>
+    </aside>
+    <div id="content-split">
+      <main id="main"></main>
+      <div id="split-drag" hidden></div>
+      <div id="play-host" hidden></div>
+    </div>
+  </div>
+</div>
+<script src="/vendor/highlight.min.js"></script>
+<script src="/vendor/codemirror.min.js"></script>
+<script src="/vendor/clike.min.js"></script>
+<script src="/vendor/python.min.js"></script>
+<script src="/vendor/javascript.min.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

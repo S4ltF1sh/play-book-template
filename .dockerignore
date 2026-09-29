@@ -1,0 +1,7 @@
+playbook
+README.md
+curriculum.md
+.claude/
+Dockerfile
+.dockerignore
+document-sources/

@@ -1,0 +1,7 @@
+[
+  { "term": "section", "def": "Đơn vị học nhỏ nhất trong một chương; id của nó là khóa lưu tiến độ — không đổi tên sau khi phát hành" },
+  { "term": "check", "def": "Regex chấm tự động trên output của một pane; tất cả checks pass thì bài tập hoàn thành" },
+  { "term": "pane", "def": "Một ô playground độc lập: editor + terminal + process riêng" },
+  { "term": "toolchain", "def": "Bộ công cụ biên dịch/chạy code của một pane: c, cpp, python, node, kotlin, java" },
+  { "term": "gate", "def": "Cơ chế khóa nút Tiếp cho đến khi section hiện tại hoàn thành" }
+]
