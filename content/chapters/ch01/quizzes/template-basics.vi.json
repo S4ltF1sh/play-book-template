@@ -7,7 +7,7 @@
       "choices": [
         "Khi bấm nút Đánh dấu đã học",
         "Khi mọi tiêu chí chấm tự động cùng pass",
-        "Khi code biên dịch không có warning",
+        "Khi code biên dịch xong mà không có warning nào",
         "Khi đã mở xem đáp án mẫu"
       ],
       "answer": 1,
@@ -20,7 +20,7 @@
         "Pane B chỉ chạy khi pane A thoát",
         "Chung một process, chia hai cửa sổ",
         "Độc lập hoàn toàn, mỗi pane một process",
-        "Pane A là editor, pane B mới chạy code"
+        "Pane A chỉ là editor, còn pane B mới chạy code"
       ],
       "answer": 2,
       "explanation": "Mỗi pane có WebSocket + process riêng — vì thế mô phỏng được client/server nói chuyện với nhau qua localhost."

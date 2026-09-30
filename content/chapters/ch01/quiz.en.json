@@ -7,7 +7,7 @@
       "choices": [
         "The pane's `toolchain` field in exercises.json",
         "Change `default_locale` in course.json",
-        "Name the section file with a .py suffix",
+        "Name the section file with a .py suffix so it runs as Python",
         "Pass a --python flag to the binary"
       ],
       "answer": 0,

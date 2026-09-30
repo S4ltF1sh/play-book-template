@@ -154,6 +154,95 @@ func TestEnginePersistentWorkspace(t *testing.T) {
 	}
 }
 
+// Persistent workspaces are per pane: another pane with the same file
+// names gets its own directory, and files a previous Run staged but the
+// current one doesn't are removed.
+func TestEnginePersistentPerPaneAndPrune(t *testing.T) {
+	reg := shReg(t)
+	main := File{Name: "main.sh", Content: "[ -f marker ] && echo reused; touch marker; ls\n"}
+	a := reg.NewSession(context.Background())
+	defer a.Close()
+	a.Pane = "ch01/lab-a/0"
+	runToExit(t, reg, a, "sh-persist", []File{main}, nil)
+	a.Close() // free the claim: only the pane id may separate the two
+
+	b := reg.NewSession(context.Background())
+	defer b.Close()
+	b.Pane = "ch01/lab-b/0"
+	if out, _ := runToExit(t, reg, b, "sh-persist", []File{main}, nil); strings.Contains(out, "reused") {
+		t.Fatalf("pane lab-b reused lab-a's workspace:\n%s", out)
+	}
+
+	c := reg.NewSession(context.Background())
+	defer c.Close()
+	c.Pane = "ch01/lab-c/0"
+	if out, _ := runToExit(t, reg, c, "sh-persist", []File{main, {Name: "old.sh", Content: "true\n"}}, nil); !strings.Contains(out, "old.sh") {
+		t.Fatalf("old.sh not staged:\n%s", out)
+	}
+	out, _ := runToExit(t, reg, c, "sh-persist", []File{main}, nil)
+	if !strings.Contains(out, "reused") || strings.Contains(out, "old.sh") {
+		t.Fatalf("same pane should reuse its workspace without the dropped old.sh:\n%s", out)
+	}
+}
+
+// pruneStaged removes files the previous plan had and the current lacks.
+func TestPruneStaged(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a.rs", "src/b.rs"} {
+		if err := writeIfChanged(filepath.Join(dir, n), []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pruneStaged(dir, []string{"a.rs", "src/b.rs"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "target-output"), []byte("build artefact"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := pruneStaged(dir, []string{"a.rs"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "src/b.rs")); !os.IsNotExist(err) {
+		t.Errorf("src/b.rs survived the prune (err=%v)", err)
+	}
+	for _, keep := range []string{"a.rs", "target-output"} {
+		if _, err := os.Stat(filepath.Join(dir, keep)); err != nil {
+			t.Errorf("%s was removed: %v", keep, err)
+		}
+	}
+}
+
+// The most specific layout pattern wins: exact name, then longer glob.
+func TestLayoutPrecedence(t *testing.T) {
+	tc := &Toolchain{Layout: map[string]string{"*.rs": "src", "build.rs": ".", "*_test.rs": "tests", "*.h": "include"}}
+	for name, want := range map[string]string{
+		"main.rs": "src", "build.rs": "", "io_test.rs": "tests", "api.h": "include", "Cargo.toml": "",
+	} {
+		if got := layoutDir(tc, name); got != want {
+			t.Errorf("layoutDir(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// A detect entry with "/" is a path that must exist: a file or directory,
+// e.g. a venv or a prefetched cache under $ENV_DIR.
+func TestDetectPaths(t *testing.T) {
+	env := t.TempDir()
+	reg, err := Load([]byte(`[
+	  { "name": "ready", "detect": ["sh", "$ENV_DIR/cache"], "sources": ["*.x"], "run": "true" },
+	  { "name": "unset", "detect": ["sh", "$ENV_DIR/venv/bin/python"], "sources": ["*.y"], "run": "true" }
+	]`), env, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(env, "cache"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if avail := reg.Available(); !avail["ready"] || avail["unset"] {
+		t.Fatalf("Available = %v, want ready installed and unset missing", avail)
+	}
+}
+
 func TestEngineRejectsPathTraversal(t *testing.T) {
 	reg := shReg(t)
 	sess := reg.NewSession(context.Background())
@@ -293,6 +382,24 @@ func TestRustCargoPersistent(t *testing.T) {
 	t.Logf("first run %v, second run %v", took[0], took[1])
 	if took[1] >= took[0] {
 		t.Errorf("second run (%v) not faster than first (%v): workspace not reused?", took[1], took[0])
+	}
+}
+
+// A Cargo build script sits at the crate root (layout "build.rs": "."),
+// and a warning prints once per Run, not replayed by the run step.
+func TestRustCargoBuildScriptAndWarnings(t *testing.T) {
+	reg := presets(t)
+	files := []File{
+		{Name: "main.rs", Content: "fn main(){ let unused = 1; println!(\"flag={}\", env!(\"FROM_BUILD\")); }\n"},
+		{Name: "build.rs", Content: "fn main(){ println!(\"cargo:rustc-env=FROM_BUILD=yes\"); }\n"},
+		{Name: "Cargo.toml", Content: "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"},
+	}
+	out, code := runToExit(t, reg, nil, "rust-cargo", files, nil)
+	if code != 0 || !strings.Contains(out, "flag=yes") {
+		t.Fatalf("exit %d, output:\n%s", code, out)
+	}
+	if n := strings.Count(out, "unused variable"); n != 1 {
+		t.Errorf("warning printed %d times, want 1:\n%s", n, out)
 	}
 }
 

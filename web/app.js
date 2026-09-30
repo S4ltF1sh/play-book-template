@@ -53,18 +53,68 @@ const state = {
   });
 })();
 
+// Go: clike with Go's words (raw strings in backticks, runes in quotes).
+(() => {
+  const words = (str) => Object.fromEntries(str.split(" ").map((w) => [w, true]));
+  CodeMirror.defineMIME("text/x-go", {
+    name: "clike",
+    keywords: words("break case chan const continue default defer else fallthrough for func go goto if " +
+                    "import interface map package range return select struct switch type var"),
+    types: words("bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 " +
+                 "rune string uint uint8 uint16 uint32 uint64 uintptr any"),
+    atoms: words("true false nil iota"),
+    builtin: words("append cap clear close complex copy delete imag len make max min new panic print " +
+                   "println real recover"),
+    blockKeywords: words("case default else for func if interface select struct switch type"),
+    defKeywords: words("func package type var const"),
+    hooks: {
+      "`": (stream) => {
+        while (!stream.eol()) if (stream.next() === "`") break;
+        return "string";
+      },
+    },
+  });
+})();
+
+// TOML (Cargo.toml, pyproject.toml): comments, [tables], keys, strings.
+CodeMirror.defineMode("toml", () => ({
+  startState: () => ({ inString: null }),
+  token(stream, state) {
+    if (state.inString) {
+      while (!stream.eol()) {
+        if (stream.match(state.inString)) { state.inString = null; break; }
+        stream.next();
+      }
+      return "string";
+    }
+    if (stream.sol() && stream.match(/^\s*\[\[?[^\]]*\]\]?/)) return "header";
+    if (stream.eatSpace()) return null;
+    if (stream.peek() === "#") { stream.skipToEnd(); return "comment"; }
+    if (stream.match(/^("{3}|'{3})/)) { state.inString = stream.current(); return "string"; }
+    if (stream.match(/^"(?:[^"\\]|\\.)*"?/) || stream.match(/^'[^']*'?/)) return "string";
+    if (stream.match(/^(?:true|false)\b/) || stream.match(/^[+-]?\d[\w.:+-]*/)) return "number";
+    if (stream.match(/^[A-Za-z0-9_.-]+(?=\s*=)/)) return "property";
+    stream.next();
+    return null;
+  },
+}));
+CodeMirror.defineMIME("text/x-toml", "toml");
+
 const EXT_META = {
   c: "text/x-csrc", h: "text/x-csrc", py: "python",
   cpp: "text/x-c++src", cc: "text/x-c++src", cxx: "text/x-c++src", hpp: "text/x-c++src",
   js: "javascript", mjs: "javascript", cjs: "javascript", json: "application/json",
   kt: "text/x-kotlin", kts: "text/x-kotlin", java: "text/x-java", rs: "text/x-rustsrc",
+  go: "text/x-go", toml: "text/x-toml",
 };
 const cmModeFor = (file) => EXT_META[(file || "").split(".").pop()] || "text/plain";
 const hlClassFor = (file) => {
   const e = (file || "").split(".").pop();
   return { c: "c", h: "c", py: "python", js: "javascript", mjs: "javascript",
            cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp",
-           kt: "kotlin", kts: "kotlin", java: "java", rs: "rust" }[e] || "plaintext";
+           kt: "kotlin", kts: "kotlin", java: "java", rs: "rust", go: "go", toml: "ini",
+           sh: "bash", lua: "lua", rb: "ruby", swift: "swift", ts: "typescript",
+           yaml: "yaml", yml: "yaml", sql: "sql", mk: "makefile" }[e] || "plaintext";
 };
 const defaultToolchain = () => state.course?.default_toolchain || "c";
 
@@ -436,9 +486,13 @@ async function renderSection(main, ch, sid) {
 
 async function renderExerciseSection(main, ch, sec, idx) {
   main.innerHTML = `<div class="page"><div class="crumb"><a href="#/">${esc(brand())}</a> / ${esc(loc(ch.title))}</div><p>${t("loading")}</p></div>`;
-  const { exercises, files, solution_files: solutionFiles = {} } = await exerciseData(ch.id);
-  const ex = exercises.find((e) => e.id === sec.exercise);
+  const data = await exerciseData(ch.id);
+  const ex = data.exercises.find((e) => e.id === sec.exercise);
   if (!ex) { main.innerHTML = `<div class="page"><p>exercise not found</p></div>`; return; }
+  // per-exercise bundle (starter/<ex>/<file> shadows starter/<file>)
+  const bundle = data.exercise_files?.[ex.id];
+  const files = bundle?.files || data.files || {};
+  const solutionFiles = bundle?.solution_files || data.solution_files || {};
 
   const fullId = `${ch.id}/${sec.id}`;
   const isDone = state.progress[fullId] === "done";
@@ -562,7 +616,7 @@ function makeSlot(key, paneDefs) {
     const pd = document.createElement("div");
     pd.className = "pane";
     slotEl.appendChild(pd);
-    return new Pane(pd, d.name, d.files, d.args, d.toolchain);
+    return new Pane(pd, d.name, d.files, d.args, d.toolchain, `${key}/${i}`);
   });
   host.slots[key] = { el: slotEl, panes };
   return host.slots[key];
@@ -911,9 +965,18 @@ async function renderQuizSection(main, ch, sec, idx) {
 
 // ---------- playground pane ----------
 
+// Terminal escape sequences (colours, cursor moves): Python >= 3.13
+// tracebacks, cargo and gcc colour their output under a pty. The terminal
+// is plain text and checks must match the words, so they are removed.
+const ANSI_RE = /\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_]/g;
+// an escape sequence cut off at the end of an output chunk
+const ANSI_TAIL_RE = /\x1b(?:\[[0-?]*[ -\/]*|\][^\x07\x1b]*)?$/;
+
 class Pane {
-  constructor(root, name, files, defaultArgs, toolchain) {
+  constructor(root, name, files, defaultArgs, toolchain, id) {
     this.root = root;
+    this.id = id; // "<slot key>/<index>": keys the server's persistent workspace
+    this.ansiTail = "";
     this.files = { ...files };
     this.fileNames = Object.keys(files);
     this.current = this.fileNames[0];
@@ -1015,8 +1078,13 @@ class Pane {
       ws.onmessage = (ev) => {
         const m = JSON.parse(ev.data);
         if (m.type === "out") {
-          this.print(m.data);
-          this.outBuf += m.data;
+          let text = this.ansiTail + m.data;
+          const tail = text.match(ANSI_TAIL_RE);
+          this.ansiTail = tail ? tail[0] : "";
+          if (tail) text = text.slice(0, tail.index);
+          text = text.replace(ANSI_RE, "");
+          this.print(text);
+          this.outBuf += text;
           this.onOutput?.();
         } else if (m.type === "status") {
           this.setStatus(m.data === "compiling" ? t("compiling") : t("running"), m.data === "running");
@@ -1039,11 +1107,13 @@ class Pane {
     this.files[this.current] = this.cm.getValue();
     this.term.textContent = "";
     this.outBuf = "";
+    this.ansiTail = "";
     try { await this.connect(); } catch { this.print(t("wsFail") + "\n", "err"); return; }
     const args = $(".args", this.root).value.trim();
     this.send({
       op: "run",
       toolchain: this.toolchain,
+      pane: this.id,
       files: Object.entries(this.files).map(([name, content]) => ({ name, content })),
       args: args ? args.split(/\s+/) : [],
     });

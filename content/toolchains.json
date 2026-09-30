@@ -160,11 +160,12 @@
       "Cargo.lock"
     ],
     "layout": {
-      "*.rs": "src"
+      "*.rs": "src",
+      "build.rs": "."
     },
     "workspace": "persistent",
-    "build": "cargo build --quiet --offline",
-    "run": "exec cargo run --quiet --offline -- \"$@\"",
+    "build": "cargo build --quiet --offline --message-format=json-render-diagnostics > .cargo-build.json",
+    "run": "# run the binary cargo just built (cargo run would replay its warnings)\nbin=$(sed -n 's/.*\"executable\":\"\\([^\"]*\\)\".*/\\1/p' .cargo-build.json | tail -1)\nexec \"$bin\" \"$@\"",
     "scratch": [
       {
         "name": "main.rs",

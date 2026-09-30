@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -13,8 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
-	"sync"
 	"time"
 
 	"playbook/internal/runner"
@@ -29,8 +26,10 @@ var contentFS embed.FS
 var webFS embed.FS
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "toolchains" {
-		os.Exit(toolchainsCmd(os.Args[2:]))
+	if len(os.Args) > 1 {
+		if cmd, ok := subcommands[os.Args[1]]; ok {
+			os.Exit(cmd(os.Args[2:]))
+		}
 	}
 
 	port := flag.Int("port", 0, "port to listen on (default: course.json \"port\", else 4358)")
@@ -142,132 +141,6 @@ func loadToolchains(dataDir, envDir string) *runner.Registry {
 		log.Fatal(err)
 	}
 	return reg
-}
-
-// toolchainsCmd implements `playbook toolchains [list|verify [name...]]`:
-// the playbook-setup-env skill's way to check the environment with the
-// exact definitions the playground uses.
-func toolchainsCmd(args []string) int {
-	fset := flag.NewFlagSet("toolchains", flag.ExitOnError)
-	dataDir := fset.String("data", "", "directory for user data (default: OS config dir)")
-	envDir := fset.String("env-dir", "", "override $ENV_DIR (default: $PLAYBOOK_ENV_DIR, else <data>/env)")
-	fset.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: playbook toolchains [--data DIR] [--env-dir DIR] [list | verify [name...]]")
-		fset.PrintDefaults()
-	}
-	// flags may come anywhere: pull them in front of the positionals
-	var flags, pos []string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		switch {
-		case !strings.HasPrefix(a, "-"):
-			pos = append(pos, a)
-		case strings.Contains(a, "=") || i+1 >= len(args):
-			flags = append(flags, a)
-		default: // every flag here takes a value
-			flags = append(flags, a, args[i+1])
-			i++
-		}
-	}
-	_ = fset.Parse(flags)
-	sub := ""
-	if len(pos) > 0 {
-		sub = pos[0]
-	}
-	appID, _ := courseMeta()
-	reg := loadToolchains(resolveDataDir(*dataDir, appID), *envDir)
-	avail := reg.Available()
-
-	switch sub {
-	case "", "list":
-		fmt.Printf("ENV_DIR=%s\n", reg.EnvDir())
-		for _, tc := range reg.Toolchains() {
-			state := "installed"
-			if !avail[tc.Name] {
-				state = "missing (" + strings.Join(tc.Detect, ", ") + ")"
-			}
-			fmt.Printf("%-14s %-24s %s\n", tc.Name, tc.Label, state)
-		}
-		return 0
-	case "verify":
-		names := pos[1:]
-		explicit := len(names) > 0
-		if !explicit {
-			for _, tc := range reg.Toolchains() {
-				names = append(names, tc.Name)
-			}
-		}
-		failed := false
-		for _, name := range names {
-			if ok, known := avail[name]; known && !ok && !explicit {
-				fmt.Printf("SKIP %s (not installed)\n", name)
-				continue
-			}
-			out, err := verifyToolchain(reg, name)
-			if err != nil {
-				failed = true
-				fmt.Printf("FAIL %s: %v\n", name, err)
-				if out != "" {
-					fmt.Println(indent(out))
-				}
-				continue
-			}
-			// exit 0 alone isn't proof: show what the scratch printed
-			fmt.Printf("PASS %s\n%s\n", name, indent(out))
-		}
-		if failed {
-			return 1
-		}
-		return 0
-	default:
-		fset.Usage()
-		return 2
-	}
-}
-
-// verifyToolchain runs the toolchain's scratch program through the real
-// runner and expects exit code 0.
-func verifyToolchain(reg *runner.Registry, name string) (string, error) {
-	var tc *runner.Toolchain
-	for _, t := range reg.Toolchains() {
-		if t.Name == name {
-			tc = t
-		}
-	}
-	if tc == nil {
-		return "", fmt.Errorf("not defined in content/toolchains.json")
-	}
-	if len(tc.Scratch) == 0 {
-		return "", fmt.Errorf("no scratch program to verify with")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	sess := reg.NewSession(ctx)
-	defer sess.Close()
-
-	var mu sync.Mutex
-	var out strings.Builder
-	collect := func(s string) { mu.Lock(); out.WriteString(s); mu.Unlock() }
-	exit := make(chan int, 1)
-	if err := sess.Run(name, tc.Scratch, nil, collect, func(string) {}, func(c int) { exit <- c }); err != nil {
-		return out.String(), err
-	}
-	select {
-	case code := <-exit:
-		mu.Lock()
-		defer mu.Unlock()
-		if code != 0 {
-			return out.String(), fmt.Errorf("exit %d", code)
-		}
-		return out.String(), nil
-	case <-ctx.Done():
-		sess.Kill()
-		return out.String(), fmt.Errorf("timed out")
-	}
-}
-
-func indent(s string) string {
-	return "    " + strings.ReplaceAll(strings.TrimRight(s, "\n"), "\n", "\n    ")
 }
 
 func openBrowser(url string) {

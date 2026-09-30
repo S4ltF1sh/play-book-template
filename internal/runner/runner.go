@@ -42,9 +42,12 @@ type File struct {
 type Toolchain struct {
 	Name  string `json:"name"`
 	Label string `json:"label,omitempty"`
-	// Detect lists executables that must exist for the toolchain to count
-	// as installed. Bare names are searched in $ENV_DIR/bin, then PATH; a
-	// value containing "/" is a path checked as-is (after $VAR expansion).
+	// Detect lists what must exist for the toolchain to count as installed.
+	// Bare names are executables searched in $ENV_DIR/bin, then PATH; a
+	// value containing "/" is a file or directory path that must exist
+	// (after $VAR expansion) — e.g. "$ENV_DIR/venv" or a prefetched cache,
+	// so a toolchain whose private environment never got set up shows as
+	// missing instead of failing at build time.
 	Detect []string `json:"detect"`
 	// Sources are glob patterns (matched against the file's base name) of
 	// the files that get compiled or executed. The first source listed in a
@@ -55,11 +58,15 @@ type Toolchain struct {
 	// matching neither list is dropped.
 	Stage []string `json:"stage,omitempty"`
 	// Layout maps a pattern to the subdirectory its files are staged into,
-	// e.g. {"*.rs": "src"} for Cargo. Unmatched files go to the workdir root.
+	// e.g. {"*.rs": "src"} for Cargo; "." keeps a file at the root. The most
+	// specific pattern wins: an exact name beats a glob ({"build.rs": "."}
+	// overrides "*.rs"), then the longer pattern. Unmatched files go to the
+	// workdir root.
 	Layout map[string]string `json:"layout,omitempty"`
 	// Workspace is "temp" (default: a fresh directory per Run) or
-	// "persistent" (reused across Runs of a pane, so incremental build tools
-	// skip unchanged work).
+	// "persistent" (reused across Runs of the same pane, so incremental build
+	// tools skip unchanged work; files a previous Run staged but this one
+	// doesn't are removed).
 	Workspace string `json:"workspace,omitempty"`
 	// Env adds variables to the build/run environment; values may reference
 	// $ENV_DIR, $PATH and any other variable.
@@ -163,8 +170,8 @@ func isExecutable(p string) bool {
 func (r *Registry) missing(tc *Toolchain) string {
 	for _, bin := range tc.Detect {
 		b := os.Expand(bin, r.getenv)
-		if strings.Contains(b, "/") {
-			if !isExecutable(b) {
+		if strings.Contains(bin, "/") {
+			if _, err := os.Stat(b); err != nil {
 				return bin
 			}
 			continue
@@ -268,17 +275,31 @@ func shell(ctx context.Context, command string, args []string) *exec.Cmd {
 	return exec.CommandContext(ctx, "/bin/sh", append([]string{"-c", command, "sh"}, args...)...)
 }
 
-// layoutDir returns where a file is staged (first matching pattern in
-// sorted order, so the result is deterministic).
+// layoutDir returns where a file is staged: the most specific matching
+// pattern wins — an exact name before any glob, then the longer pattern,
+// then lexical order, so the result is deterministic.
 func layoutDir(tc *Toolchain, name string) string {
+	isGlob := func(p string) bool { return strings.ContainsAny(p, "*?[\\") }
 	pats := make([]string, 0, len(tc.Layout))
 	for p := range tc.Layout {
 		pats = append(pats, p)
 	}
-	sort.Strings(pats)
+	sort.Slice(pats, func(i, j int) bool {
+		a, b := pats[i], pats[j]
+		if isGlob(a) != isGlob(b) {
+			return !isGlob(a)
+		}
+		if len(a) != len(b) {
+			return len(a) > len(b)
+		}
+		return a < b
+	})
 	for _, p := range pats {
 		if matchAny([]string{p}, name) {
-			return tc.Layout[p]
+			if d := tc.Layout[p]; d != "." {
+				return d
+			}
+			return ""
 		}
 	}
 	return ""
@@ -313,6 +334,11 @@ type Session struct {
 	mu   sync.Mutex
 	cmd  *exec.Cmd
 	ptmx *os.File
+	// Pane identifies the pane across Runs (e.g. "ch02/buffers-lab/0",
+	// "scratch/1"). It keys persistent workspaces, so two exercises that
+	// happen to use the same file names don't share a build directory;
+	// without it the key is the set of staged file names.
+	Pane string
 }
 
 // NewSession starts a pane session; cancelling ctx aborts a running build.
@@ -324,12 +350,22 @@ type outWriter struct{ f func(string) }
 
 func (w *outWriter) Write(p []byte) (int, error) { w.f(string(p)); return len(p), nil }
 
+// stagedList records, inside a persistent workspace, which files the last
+// Run staged, so files dropped from the pane since then can be removed.
+const stagedList = ".playbook-staged"
+
 // workspace returns the directory to stage into and a cleanup func.
 func (s *Session) workspace(tc *Toolchain, names []string) (string, func(), error) {
 	if tc.Workspace == "persistent" {
-		sorted := append([]string{}, names...)
-		sort.Strings(sorted)
-		sum := sha256.Sum256([]byte(strings.Join(sorted, "\x00")))
+		// one directory per pane; clients that send no pane id get one per
+		// set of staged file names
+		key := "pane\x00" + s.Pane
+		if s.Pane == "" {
+			sorted := append([]string{}, names...)
+			sort.Strings(sorted)
+			key = "files\x00" + strings.Join(sorted, "\x00")
+		}
+		sum := sha256.Sum256([]byte(key))
 		dir := filepath.Join(s.reg.workDir, tc.Name+"-"+hex.EncodeToString(sum[:6]))
 		if s.reg.claim(dir, s) {
 			if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -343,6 +379,23 @@ func (s *Session) workspace(tc *Toolchain, names []string) (string, func(), erro
 		return "", nil, err
 	}
 	return dir, func() { os.RemoveAll(dir) }, nil
+}
+
+// pruneStaged removes files a previous Run staged into dir that the current
+// plan no longer contains, then records the current plan.
+func pruneStaged(dir string, names []string) error {
+	keep := map[string]bool{}
+	for _, n := range names {
+		keep[n] = true
+	}
+	if old, err := os.ReadFile(filepath.Join(dir, stagedList)); err == nil {
+		for _, n := range strings.Split(string(old), "\n") {
+			if n != "" && !keep[n] && filepath.IsLocal(n) {
+				_ = os.Remove(filepath.Join(dir, filepath.FromSlash(n)))
+			}
+		}
+	}
+	return os.WriteFile(filepath.Join(dir, stagedList), []byte(strings.Join(names, "\n")+"\n"), 0o644)
 }
 
 // writeIfChanged skips identical content so mtime-based build tools
@@ -404,6 +457,12 @@ func (s *Session) Run(toolchain string, files []File, args []string, onOut func(
 	dir, cleanup, err := s.workspace(tc, names)
 	if err != nil {
 		return err
+	}
+	if tc.Workspace == "persistent" {
+		if err := pruneStaged(dir, names); err != nil {
+			cleanup()
+			return err
+		}
 	}
 	for _, f := range plan {
 		if err := writeIfChanged(filepath.Join(dir, filepath.FromSlash(f.path)), []byte(f.content)); err != nil {
