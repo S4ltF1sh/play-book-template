@@ -17,17 +17,18 @@ import (
 )
 
 type Server struct {
-	mux     *http.ServeMux
-	content *content.Content
-	db      *store.Store
+	mux        *http.ServeMux
+	content    *content.Content
+	db         *store.Store
+	toolchains *runner.Registry
 }
 
-func New(contentFS, webFS fs.FS, db *store.Store) *Server {
+func New(contentFS, webFS fs.FS, db *store.Store, toolchains *runner.Registry) *Server {
 	c, err := content.Load(contentFS)
 	if err != nil {
 		log.Fatalf("cannot load course content: %v", err)
 	}
-	s := &Server{mux: http.NewServeMux(), content: c, db: db}
+	s := &Server{mux: http.NewServeMux(), content: c, db: db, toolchains: toolchains}
 
 	// no-cache so a rebuilt binary never serves stale embedded assets
 	fileSrv := http.FileServerFS(webFS)
@@ -88,7 +89,9 @@ func (s *Server) handleCourse(w http.ResponseWriter, r *http.Request) {
 		"course":     m,
 		"progress":   prog,
 		"locale":     s.db.Setting("locale", m.DefaultLocale),
-		"toolchains": runner.Available(),
+		"toolchains": s.toolchains.Available(),
+		// name/label/scratch per definition (no commands) for the scratch pane
+		"toolchain_defs": s.toolchains.Public(),
 	})
 }
 
@@ -296,8 +299,8 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	sess := runner.New()
-	defer sess.Kill()
+	sess := s.toolchains.NewSession(ctx)
+	defer sess.Close()
 
 	var wmu sync.Mutex
 	send := func(m wsOut) {

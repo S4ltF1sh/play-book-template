@@ -2,6 +2,6 @@
   { "term": "section", "def": "The smallest learning unit in a chapter; its id is the progress key — never rename after shipping" },
   { "term": "check", "def": "An auto-grading regex against one pane's output; when all checks pass the exercise is complete" },
   { "term": "pane", "def": "One independent playground cell: its own editor, terminal, and process" },
-  { "term": "toolchain", "def": "The compile/run tooling of a pane: c, cpp, python, node, kotlin, java" },
+  { "term": "toolchain", "def": "How a pane builds and runs its code — an entry in content/toolchains.json (presets: c, cpp, python, node, kotlin, java, rust, rust-cargo)" },
   { "term": "gate", "def": "The mechanism locking the Next button until the current section is complete" }
 ]

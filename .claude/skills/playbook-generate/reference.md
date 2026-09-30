@@ -20,7 +20,7 @@ All paths are relative to `content/`. Every localized file exists in EVERY local
 ```
 
 - `app_id` names the user-data dir (progress DB). Set once per playbook; NEVER rename later.
-- `default_toolchain`: `c` | `cpp` | `python` | `node` | `kotlin` | `java` — used by scratch panes and panes without their own `toolchain`.
+- `default_toolchain`: a toolchain name from `toolchains.json` — used by scratch panes and panes without their own `toolchain`.
 - `port`: default server port for this playbook (pick a unique one per playbook; `--port` still overrides).
 - `brand_icon` (optional): line icon shown before the brand and used as the favicon — `sprout` (default) | `book` | `code` | `terminal` | `flask` | `cpu` | `globe` | `layers` | `none`. Pick one that fits the subject.
 
@@ -108,14 +108,72 @@ Same question schema, `"id": "chNN"`, 8–10 questions covering the whole chapte
 ]
 ```
 
-- `toolchain` per pane: `c` | `cpp` | `python` | `node` | `kotlin` | `java`. Omitted ⇒ course `default_toolchain`, or inferred from the entry file's extension.
+- `toolchain` per pane: a name from [`toolchains.json`](#toolchainsjson). Omitted ⇒ course `default_toolchain`, or inferred from the entry file (first definition whose `sources` match).
 - **The FIRST file in `files` is the entry point** (the file that is run / holds `main`).
-- Toolchain details: `c` compiles all listed `.c` files with `cc -Wall -Wextra -O0`; `python` runs `python3 -u <entry>`; `node` runs `node <entry>`; `kotlin` compiles `.kt` via `kotlinc` to a jar and runs it with the `kotlin` CLI (entry `main.kt` ⇒ class `MainKt`; a `.kts` entry runs directly via `kotlinc -script`); `java` compiles with `javac` and runs the class named after the entry file.
+- How a pane builds and runs is entirely its toolchain's definition — read it in `toolchains.json` before writing starters (entry-file naming, which files get staged, what the build step prints). Pane file names may include subdirectories (`src/lib.rs`) but no spaces, `..` or absolute paths.
 - `pane` in a check is the index into `panes`; `pattern` is a JS regex tested against that pane's accumulated stdout/stderr **since its last Run** (see check semantics in SKILL.md).
 - Convention: Client pane first, Server second (UI shows content → client → server left-to-right).
 - Starter files listed in `files` must exist in `starter/`. Single-pane exercises are fine.
 - Checks must pass by following the tasks with the starter as given (after the edits the tasks ask for).
 - `solution` is REQUIRED: `files` name solved versions in `solution/` (only the files the tasks change); `notes` explain the key insight in every locale and end with the "use solution & mark as done" fallback reminder.
+
+## toolchains.json
+
+A JSON array; each entry tells the playground how to stage a pane's files and build/run them. Order = extension-inference priority. The runner knows no languages beyond this file; the `playbook-setup-env` skill writes custom entries and installs what they need.
+
+```json
+{
+  "name": "cpp-make",
+  "label": "C++ (make)",
+  "detect": ["make", "c++"],
+  "sources": ["*.cpp"],
+  "stage": ["*.hpp", "Makefile"],
+  "layout": { "*.hpp": "include" },
+  "workspace": "persistent",
+  "env": { "CXXFLAGS": "-std=c++17 -Wall -Iinclude" },
+  "build": "make -s prog",
+  "run": "exec ./prog \"$@\"",
+  "scratch": [
+    { "name": "main.cpp", "content": "#include <iostream>\nint main(){std::cout<<\"hello, playground!\\n\";}\n" },
+    { "name": "Makefile", "content": "prog: main.cpp\n\t$(CXX) $(CXXFLAGS) -o prog main.cpp\n" }
+  ]
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `name` | id used by panes, `default_toolchain`, and the env recipes (`env/setup-*.sh` cases) |
+| `label` | display name (optional) |
+| `detect` | executables that must exist for the toolchain to count as installed; bare names are looked up in `$ENV_DIR/bin`, then `PATH`; values with `/` are paths (`$ENV_DIR/venv/bin/python`) |
+| `sources` | glob patterns (on the base name) of compiled/executed files. First source in a pane = `$ENTRY`; all = `$SRCS` (space-separated) |
+| `stage` | patterns of extra files written but never treated as sources (headers, data, manifests). Files matching neither list are dropped |
+| `layout` | pattern → subdirectory to stage into (e.g. `{"*.rs": "src"}` for Cargo). Default: workdir root |
+| `workspace` | `temp` (default; fresh dir per Run) or `persistent` (kept per pane across Runs so incremental builds are fast; identical files aren't rewritten, so mtimes stay put) |
+| `env` | extra variables; values expand `$ENV_DIR`, `$PATH`, … (e.g. `"PATH": "$ENV_DIR/venv/bin:$PATH"`) |
+| `build` | optional `sh` command run first; its output streams to the pane; non-zero exit = "compile failed"; 5-minute timeout |
+| `run` | `sh` command starting the program in a pty; pane args are `"$@"` — end it with `exec … "$@"` |
+| `scratch` | starter files for the free playground (first = entry); `playbook toolchains verify` runs it as the smoke test |
+
+Every command sees: `$ENTRY`, `$SRCS`, `$ENV_DIR` (the playbook's private environment; `--env-dir` / `$PLAYBOOK_ENV_DIR` / default `<data>/env`), and `PATH` with `$ENV_DIR/bin` first.
+
+More patterns:
+
+```json
+{ "name": "python-ds", "label": "Python (data)", "detect": ["$ENV_DIR/venv/bin/python"],
+  "sources": ["*.py"], "stage": ["*.csv"],
+  "env": { "PATH": "$ENV_DIR/venv/bin:$PATH" },
+  "run": "exec python -u \"$ENTRY\" \"$@\"" }
+
+{ "name": "kotlin-gradle", "label": "Kotlin (Gradle)", "detect": ["gradle", "java"],
+  "sources": ["*.kt"], "stage": ["build.gradle.kts", "settings.gradle.kts"],
+  "layout": { "*.kt": "src/main/kotlin" }, "workspace": "persistent",
+  "build": "gradle -q --offline installDist",
+  "run": "exec build/install/app/bin/app \"$@\"" }
+```
+
+- `python-ds`: setup creates `$ENV_DIR/venv` and installs pinned libraries (`env/requirements.txt`).
+- `kotlin-gradle`: `settings.gradle.kts` sets `rootProject.name = "app"`; setup runs one online build so `--offline` has the dependencies cached.
+- `rust-cargo` (preset): Cargo layout via `layout`, `cargo build --offline`; crates used by exercises are prefetched during setup (`cargo fetch`).
 
 ## glossary file
 

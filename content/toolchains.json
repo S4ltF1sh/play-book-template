@@ -1,0 +1,179 @@
+[
+  {
+    "name": "c",
+    "label": "C",
+    "detect": [
+      "cc"
+    ],
+    "sources": [
+      "*.c"
+    ],
+    "stage": [
+      "*.h"
+    ],
+    "build": "cc -Wall -Wextra -O0 -o prog $SRCS",
+    "run": "exec ./prog \"$@\"",
+    "scratch": [
+      {
+        "name": "main.c",
+        "content": "#include <stdio.h>\n\nint main(void)\n{\n    printf(\"hello, playground!\\n\");\n    return 0;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "cpp",
+    "label": "C++",
+    "detect": [
+      "c++"
+    ],
+    "sources": [
+      "*.cpp",
+      "*.cc",
+      "*.cxx"
+    ],
+    "stage": [
+      "*.hpp",
+      "*.h"
+    ],
+    "build": "c++ -std=c++17 -Wall -Wextra -O0 -o prog $SRCS",
+    "run": "exec ./prog \"$@\"",
+    "scratch": [
+      {
+        "name": "main.cpp",
+        "content": "#include <iostream>\n\nint main()\n{\n    std::cout << \"hello, playground!\\n\";\n    return 0;\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "python",
+    "label": "Python",
+    "detect": [
+      "python3"
+    ],
+    "sources": [
+      "*.py"
+    ],
+    "stage": [
+      "*.txt",
+      "*.json",
+      "*.csv"
+    ],
+    "run": "exec python3 -u \"$ENTRY\" \"$@\"",
+    "scratch": [
+      {
+        "name": "main.py",
+        "content": "print(\"hello, playground!\")\n"
+      }
+    ]
+  },
+  {
+    "name": "node",
+    "label": "Node.js",
+    "detect": [
+      "node"
+    ],
+    "sources": [
+      "*.js",
+      "*.mjs",
+      "*.cjs"
+    ],
+    "stage": [
+      "*.json",
+      "*.txt"
+    ],
+    "run": "exec node \"$ENTRY\" \"$@\"",
+    "scratch": [
+      {
+        "name": "main.js",
+        "content": "console.log(\"hello, playground!\");\n"
+      }
+    ]
+  },
+  {
+    "name": "kotlin",
+    "label": "Kotlin (CLI)",
+    "detect": [
+      "kotlinc",
+      "kotlin"
+    ],
+    "sources": [
+      "*.kt",
+      "*.kts"
+    ],
+    "build": "case \"$ENTRY\" in *.kts) ;; *) kotlinc $SRCS -d prog.jar ;; esac",
+    "run": "case \"$ENTRY\" in *.kts) exec kotlinc -script \"$ENTRY\" \"$@\" ;; esac\n# entry main.kt -> class MainKt\ncls=$(basename \"$ENTRY\" .kt)\nfirst=$(printf %s \"$cls\" | cut -c1 | tr \"[:lower:]\" \"[:upper:]\")\nexec kotlin -classpath prog.jar \"${first}${cls#?}Kt\" \"$@\"",
+    "scratch": [
+      {
+        "name": "main.kt",
+        "content": "fun main() {\n    println(\"hello, playground!\")\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "java",
+    "label": "Java",
+    "detect": [
+      "javac",
+      "java"
+    ],
+    "sources": [
+      "*.java"
+    ],
+    "build": "javac -d . $SRCS",
+    "run": "exec java \"$(basename \"$ENTRY\" .java)\" \"$@\"",
+    "scratch": [
+      {
+        "name": "Main.java",
+        "content": "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"hello, playground!\");\n    }\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "rust",
+    "label": "Rust (rustc)",
+    "detect": [
+      "rustc"
+    ],
+    "sources": [
+      "*.rs"
+    ],
+    "build": "rustc --edition 2021 -o prog \"$ENTRY\"",
+    "run": "exec ./prog \"$@\"",
+    "scratch": [
+      {
+        "name": "main.rs",
+        "content": "fn main() {\n    println!(\"hello, playground!\");\n}\n"
+      }
+    ]
+  },
+  {
+    "name": "rust-cargo",
+    "label": "Rust (Cargo)",
+    "detect": [
+      "cargo"
+    ],
+    "sources": [
+      "*.rs"
+    ],
+    "stage": [
+      "Cargo.toml",
+      "Cargo.lock"
+    ],
+    "layout": {
+      "*.rs": "src"
+    },
+    "workspace": "persistent",
+    "build": "cargo build --quiet --offline",
+    "run": "exec cargo run --quiet --offline -- \"$@\"",
+    "scratch": [
+      {
+        "name": "main.rs",
+        "content": "fn main() {\n    println!(\"hello, playground!\");\n}\n"
+      },
+      {
+        "name": "Cargo.toml",
+        "content": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\n"
+      }
+    ]
+  }
+]

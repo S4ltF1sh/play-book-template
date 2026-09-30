@@ -10,37 +10,61 @@ const state = {
   progress: {},   // "<ch>/<sectionId>" -> "done"
   locale: "vi",
   toolchains: {}, // toolchain name -> installed?
+  toolchainDefs: [], // [{name, label, scratch: [{name, content}]}]
 };
 
 // ---------- toolchains (playground languages) ----------
+// Toolchains are data (content/toolchains.json): the server runs them and
+// sends name/label/scratch here via /api/course. The editor only needs a
+// mode per file extension, below.
 
-const TOOLCHAINS = {
-  c:      { scratchFile: "main.c",   cmMode: "text/x-csrc",
-            scratch: '#include <stdio.h>\n\nint main(void)\n{\n    printf("hello, playground!\\n");\n    return 0;\n}\n' },
-  cpp:    { scratchFile: "main.cpp", cmMode: "text/x-c++src",
-            scratch: '#include <iostream>\n\nint main()\n{\n    std::cout << "hello, playground!\\n";\n    return 0;\n}\n' },
-  python: { scratchFile: "main.py",  cmMode: "python",
-            scratch: 'print("hello, playground!")\n' },
-  node:   { scratchFile: "main.js",  cmMode: "javascript",
-            scratch: 'console.log("hello, playground!");\n' },
-  kotlin: { scratchFile: "main.kt",  cmMode: "text/x-kotlin",
-            scratch: 'fun main() {\n    println("hello, playground!")\n}\n' },
-  java:   { scratchFile: "Main.java", cmMode: "text/x-java",
-            scratch: 'public class Main {\n    public static void main(String[] args) {\n        System.out.println("hello, playground!");\n    }\n}\n' },
-};
+// CodeMirror ships no Rust mode in web/vendor — derive one from clike.
+// Hooks run after clike consumed the char: `'` splits lifetimes ('a) from
+// char literals ('x', '\n'); `#` colours attributes like #[derive(Debug)].
+(() => {
+  const words = (str) => Object.fromEntries(str.split(" ").map((w) => [w, true]));
+  CodeMirror.defineMIME("text/x-rustsrc", {
+    name: "clike",
+    keywords: words("as async await break const continue crate dyn else enum extern fn for if impl in " +
+                    "let loop match mod move mut pub ref return self Self static struct super trait type " +
+                    "unsafe use where while"),
+    types: words("bool char str String i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 " +
+                 "Vec Option Result Box Rc Arc HashMap HashSet"),
+    atoms: words("true false None Some Ok Err"),
+    blockKeywords: words("else for if impl loop match mod struct enum trait unsafe while"),
+    defKeywords: words("enum fn mod struct trait type"),
+    hooks: {
+      "'": (stream) => {
+        if (stream.match(/^(?:\\(?:[nrt0'"\\]|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\})|[^\\'])'/)) return "string";
+        stream.eatWhile(/\w/);
+        return "variable-2";
+      },
+      "#": (stream) => {
+        if (!stream.match(/^!?\[/, false)) return false;
+        let depth = 0;
+        while (!stream.eol()) {
+          const c = stream.next();
+          if (c === "[") depth++;
+          else if (c === "]" && --depth === 0) break;
+        }
+        return "meta";
+      },
+    },
+  });
+})();
 
 const EXT_META = {
   c: "text/x-csrc", h: "text/x-csrc", py: "python",
   cpp: "text/x-c++src", cc: "text/x-c++src", cxx: "text/x-c++src", hpp: "text/x-c++src",
   js: "javascript", mjs: "javascript", cjs: "javascript", json: "application/json",
-  kt: "text/x-kotlin", kts: "text/x-kotlin", java: "text/x-java",
+  kt: "text/x-kotlin", kts: "text/x-kotlin", java: "text/x-java", rs: "text/x-rustsrc",
 };
 const cmModeFor = (file) => EXT_META[(file || "").split(".").pop()] || "text/plain";
 const hlClassFor = (file) => {
   const e = (file || "").split(".").pop();
   return { c: "c", h: "c", py: "python", js: "javascript", mjs: "javascript",
            cpp: "cpp", cc: "cpp", cxx: "cpp", hpp: "cpp",
-           kt: "kotlin", kts: "kotlin", java: "java" }[e] || "plaintext";
+           kt: "kotlin", kts: "kotlin", java: "java", rs: "rust" }[e] || "plaintext";
 };
 const defaultToolchain = () => state.course?.default_toolchain || "c";
 
@@ -177,6 +201,7 @@ async function boot() {
   state.progress = data.progress;
   state.locale = data.locale || state.course.default_locale || "vi";
   state.toolchains = data.toolchains || {};
+  state.toolchainDefs = data.toolchain_defs || [];
   document.title = brand();
   $("#brand").innerHTML = `${brandIcon() ? ico(brandIcon()) : ""}<span>${esc(brand())}</span>`;
   setFavicon();
@@ -487,8 +512,11 @@ async function renderExerciseSection(main, ch, sec, idx) {
 // ---------- playground host (right pane) ----------
 
 const scratchDef = () => {
-  const tc = TOOLCHAINS[defaultToolchain()] || TOOLCHAINS.c;
-  return { toolchain: defaultToolchain(), files: { [tc.scratchFile]: tc.scratch } };
+  const def = state.toolchainDefs.find((d) => d.name === defaultToolchain()) || state.toolchainDefs[0];
+  const files = {};
+  for (const f of def?.scratch || []) files[f.name] = f.content;
+  if (!Object.keys(files).length) files["main.txt"] = "";
+  return { toolchain: def?.name || defaultToolchain(), files };
 };
 
 const host = {

@@ -32,7 +32,7 @@ type Manifest struct {
 	Tagline  map[string]string `json:"tagline"`
 	Subtitle map[string]string `json:"subtitle"`
 	// DefaultToolchain is used by scratch panes and panes with no toolchain
-	// of their own: "c" | "python" | "node" | "kotlin" | "java".
+	// of their own: a name from content/toolchains.json.
 	DefaultToolchain string    `json:"default_toolchain"`
 	Locales          []string  `json:"locales"`
 	DefaultLocale    string    `json:"default_locale"`
