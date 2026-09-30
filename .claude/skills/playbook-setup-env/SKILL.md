@@ -21,7 +21,7 @@ In priority order:
 
 1. **`curriculum.md`** (from `playbook-plan`): its `toolchains:` line names the toolchains, its `environment:` block says what each needs beyond a preset (build tool, libraries, versions). This is the authoritative scope — set up exactly this, nothing more.
 2. Otherwise scan what ships: pane `toolchain` values in `content/chapters/*/exercises.json`, plus `default_toolchain` in `content/course.json`.
-3. Current state: `go run . toolchains list` prints `ENV_DIR=…` and installed/missing per defined toolchain.
+3. Current state: `go run . toolchains list` prints `ENV_DIR=…` and installed/missing per defined toolchain. If it warns that `app_id` is still the template's, stop: a unique `app_id` must be set in `content/course.json` first (playbook-plan step 0), or everything installs into the template demo's `$ENV_DIR`.
 
 Never install the world "just in case" — JVM and build-tool installs are big and slow. If the user asks for everything, confirm once.
 
@@ -39,11 +39,15 @@ For every toolchain in scope:
 Rules that keep definitions healthy:
 
 - `run` ends in `exec … "$@"` — the program replaces the shell (clean signals) and receives the pane's args intact.
+- Quote `"$ENV_DIR"` everywhere: on macOS it contains a space (`~/Library/Application Support/…`).
+- `detect` lists the tools **and** a marker of the private part (`$ENV_DIR/venv`, `$ENV_DIR/cargo/registry`), so a toolchain whose setup never ran shows as missing instead of failing at build time.
 - **Run never touches the network.** Dependencies are installed or prefetched during setup; build commands use offline flags (`--offline`, `pip --no-index`, …).
 - Build tools that compile incrementally (make, cargo, gradle) get `"workspace": "persistent"`, and quiet flags (`-q`, `-s`) so their chatter doesn't pollute check regexes.
 - Playbook-private installs live in `$ENV_DIR`, referenced from definitions as `$ENV_DIR/...` — never `pip install` globally or `npm -g`.
 - Array order is extension-inference priority; keep `sources` patterns of competing toolchains ordered so the common one comes first.
 - Give every definition a `scratch` program that exercises what's special about it (e.g. `import numpy`, a crate `use`) — it is the smoke test in step 5.
+- Cargo build scripts that compile C (the `cc` crate) need `cargo:rerun-if-changed` per C file — see reference.md's rust-cargo notes; tell `playbook-generate` in your report.
+- A new file extension (`.go`, `.toml`, `.lua`, …) also needs editor support in `web/app.js`: `EXT_META` (CodeMirror mode, plain text if none) and `hlClassFor` (highlight.js language, used in solution code blocks). Add the entries; that's the only non-data change a new language needs.
 - Leave unused presets in place unless the user wants a lean file; never remove one referenced by exercises or `default_toolchain`.
 
 ## 3. Write the recipes (you, not workers)
@@ -52,7 +56,8 @@ Rules that keep definitions healthy:
 
 - macOS: prefer Homebrew. `c`/`cpp` need `xcode-select --install` (a GUI dialog — the user must do it). `java`: brew's openjdk symlink caveat. `rust`/`rust-cargo`: keep an existing rustup setup, else `brew install rust` — it pulls in Homebrew's llvm (~2 GB total); `brew install rustup && rustup-init -y --profile minimal` (~0.5 GB) is the lean alternative, a choice for the user.
 - Linux: the distro package manager (`build-essential`, `python3`, `nodejs`, `default-jdk`, rustup for Rust — distro `rustc` is often too old).
-- Playbook-private pieces into `$ENV_DIR`, e.g. `python3 -m venv "$ENV_DIR/venv" && "$ENV_DIR/venv/bin/pip" install -r env/requirements.txt`; `cargo fetch` in a temp crate with the exercises' `Cargo.toml`; one online `gradle build` so `--offline` works later. Pin the files recipes need (`env/requirements.txt`, `env/Cargo.toml`, …) next to them.
+- Playbook-private pieces into `$ENV_DIR`, e.g. `python3 -m venv "$ENV_DIR/venv" && "$ENV_DIR/venv/bin/pip" install -r "$HERE/requirements.txt"`; `cargo fetch` in a temp crate with the exercises' `Cargo.toml`; one online `gradle build` so `--offline` works later. Pin the files recipes need (`env/requirements.txt`, `env/Cargo.toml`, …) next to them and refer to them as `"$HERE/…"` (the script's own directory): the Dockerfile runs the recipe from `/`, not the project root.
+- Docker runs the Debian recipe as root, then hands `$ENV_DIR` to the app user (`chown` in the Dockerfile) so tools that write their cache even offline (cargo's package lock, Gradle) keep working. Set the Dockerfile's default `ARG TOOLCHAINS` to this playbook's scope.
 - **Guard system installs** (`need kotlinc || brew install kotlin`, `command -v … ||` before `apt-get`) so re-running a case — or running several cases at once after the system packages are in — never touches the package manager again.
 
 ## 4. Install
@@ -61,7 +66,7 @@ Rules that keep definitions healthy:
 
 **Otherwise delegate to workers in two phases**:
 
-1. **System packages — one worker.** Package managers hold a global lock (Homebrew, apt), so they are never parallelized. Compose ONE command that installs every missing system package from the recipes (e.g. `brew install kotlin rust gradle`; Homebrew parallelizes the downloads itself) and hand it to a single worker.
+1. **System packages — one worker, only if something is missing.** Check first yourself (`command -v`, `brew list --versions <pkg>`, `dpkg -s <pkg>`); skip the phase when everything is present. Package managers hold a global lock (Homebrew, apt), so they are never parallelized: compose ONE command that installs every missing system package from the recipes (e.g. `brew install kotlin rust gradle`; Homebrew parallelizes the downloads itself) and hand it to a single worker.
 2. **Private environments — one worker per toolchain, in parallel.** Each runs `sh env/setup-<os>.sh <name>` (its system part is now a guarded no-op) and then `go run . toolchains verify <name>`. Skip toolchains that have no private part: phase 1 plus your own verification covers them.
 
 **Pick each worker's model by its sub-task** (tiers in [agents.md](../playbook-bootstrap/agents.md)): `haiku` when the brief is one exact, guarded command — the phase-1 package install, a plain recipe case; `sonnet` when the sub-task may need diagnosis within its brief — a private env with a build step (Gradle warm-up, `cargo fetch` of real crates, pip packages with native extensions), a multi-step recipe. Never above your own model.

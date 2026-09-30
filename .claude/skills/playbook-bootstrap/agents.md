@@ -44,6 +44,14 @@ Each level owns its own verification and hands **one** compact report to its par
 - **The user is reached only through the PM.** Background children can't ask the user; anything needing the user (password, GUI dialog, a denied permission, a judgment call) goes up in the report and the PM asks. A child never works around a denied permission.
 - **Don't trust, verify**: every parent re-checks its children's claims with its own cheap objective check before reporting up (e.g. `go run . toolchains verify`, `git status`, builds), as each skill specifies.
 
+## Every brief
+
+Children know only their brief. Besides the task, each one gets:
+
+- the project root as an absolute path, and the skill/reference files to read by absolute path;
+- its sandbox (which files it may write) and the report format above;
+- shell hygiene: the user's shell may alias common commands (`rm` → `rm -i`, `cat` → a pager, `ls` → something interactive), which hangs non-interactive runs — use `command rm -f`, `command cat`, `find` instead of `ls` in scripts.
+
 ## When not to delegate
 
 Spawning costs a round trip. A level does small jobs itself — e.g. setup with at most one toolchain to install and no custom environment. If the environment can't spawn nested sub-agents, the level that can't spawn does its children's work itself, sequentially, with the same rules.

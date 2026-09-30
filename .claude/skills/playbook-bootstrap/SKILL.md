@@ -14,7 +14,8 @@ playbook-plan ──Gate 1: plan + installs──▶ ┬─▶ setup coordinator
                                            └─▶ generate prep: mode, Gate 2 brief, ready chapters ┴─▶ remaining chapters ─▶ verified app
 ```
 
-1. **Plan** — invoke the `playbook-plan` skill: source intake (asking for / proposing a split if sources are unformatted), draft `curriculum.md`, iterate with the user until `status: APPROVED`.
+0. **Where you run** — the session should run inside the new playbook's directory (a copy of the template), so skills, `go run .` and relative paths all resolve there. If it runs elsewhere (e.g. in the template), read the skill files from the playbook by absolute path and tell every child the same.
+1. **Plan** — invoke the `playbook-plan` skill (its step 0 gives the playbook a unique `app_id` + `port` before anything touches the environment): source intake (asking for / proposing a split if sources are unformatted), draft `curriculum.md`, iterate with the user until `status: APPROVED`.
    - Before presenting Gate 1, run one cheap, read-only check: `go run . toolchains verify <scope>` — which scoped toolchains already PASS, which are missing or not yet defined.
    - *Gate 1 (blocking):* the curriculum approval — including its `environment:` block, which is the user's consent for the installs. If anything is missing, batch into the same gate the **coordinator model** question: propose per the rule in [agents.md](agents.md) (`opus` under a Fable/Opus PM, `sonnet` under a Sonnet PM) and let the user confirm or change it. Never generate content or install anything from a DRAFT plan.
 2. **Environment, delegated** — nothing missing → skip to step 3. Otherwise spawn ONE sub-agent **in the background**, on the model confirmed at Gate 1, as the setup coordinator: it invokes `playbook-setup-env` for exactly the missing part of the plan's `toolchains:` + `environment:` scope (it spawns its own `haiku`/`sonnet` install workers per sub-task and verifies them) and ends with a single compact report. Do not poll it, message it, or read its output — its completion notification wakes you.
@@ -24,6 +25,14 @@ playbook-plan ──Gate 1: plan + installs──▶ ┬─▶ setup coordinator
    - Start the chapters whose toolchains all PASSed in the pre-Gate-1 check. Chapters that need a pending toolchain wait for the coordinator's report.
 4. **When the setup report arrives** — re-check cheaply yourself (`go run . toolchains verify <scope>`), then start the waiting chapters. Anything the report says needs the user (password, GUI step, a choice): ask them, and keep the unaffected chapters going. A toolchain that can't be installed: adjust the plan with the user (e.g. swap the exercise language) — don't silently drop planned exercises.
 5. **Finish** per `playbook-generate`: review → merge → build → verify → task cleanup → report.
+
+## When the PM is itself a sub-agent
+
+E.g. a test harness or a larger pipeline spawned you. You can't ask the user and can't wait in the background:
+
+- **Gates become hand-backs.** At each gate, end your turn with one compact report — `GATE <name>`, what the user must see (point to files for detail), numbered questions. Your parent relays it and resumes you with the answers. Batch everything that can be asked together.
+- **Order**: Gate 1 also asks the mode question (manual/auto), so there is no extra stop. Show Gate 2 after the setup report, so the brief carries real verify results.
+- **Spawn in the foreground**, all of a batch in ONE message (per [agents.md](agents.md)): the coordinator together with the writers of chapters whose toolchains already pass; the rest after the coordinator reports. When every scoped toolchain is custom, nothing passes before setup and the stages run one after the other — that's expected.
 
 ## Rules
 

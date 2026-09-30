@@ -43,10 +43,12 @@ A plug-and-play shell for building **interactive learning playbooks**: a single 
 ## Quick start
 
 ```bash
-# 1. Copy the template
-cp -R play-book-template my-playbook && cd my-playbook
+# 1. Copy the template — without its git history and built binary
+rsync -a --exclude .git --exclude /playbook play-book-template/ my-playbook/
+cd my-playbook && git init
 
-# 2. Make it yours: app_id, brand, tagline, port, locales, default_toolchain
+# 2. Make it yours FIRST: a unique app_id (it names the data dir and the
+#    toolchain environment) and port; then brand, tagline, locales, default_toolchain
 $EDITOR content/course.json
 
 # 3. Install & check the toolchains the demo uses (skip what's already installed)
@@ -56,6 +58,8 @@ go run . toolchains verify c python
 # 4. Build & run
 go build -o my-playbook . && ./my-playbook
 ```
+
+With the agent flow (below), start your Claude session inside `my-playbook/`, so the bundled skills and `go run .` resolve against the new playbook; `playbook-plan` picks the `app_id` and port for you.
 
 The demo chapter (`content/chapters/ch01/`) shows every content type working — including a two-pane exercise mixing Python and C. Delete it once your real chapters exist.
 
@@ -87,7 +91,14 @@ All in `content/course.json`:
 
 Runtime flags: `--port`, `--host` (default `127.0.0.1`; `0.0.0.0` for Docker/LAN), `--data` (data dir), `--env-dir` (toolchain environment, see [Toolchains](#toolchains)), `--no-open`.
 
-Toolchain CLI: `playbook toolchains list` (what's defined/installed, and `ENV_DIR`) and `playbook toolchains verify [name...]` (runs each toolchain's scratch program through the real runner).
+Authoring CLI (run as `go run . <command>` while authoring — it checks the content on disk):
+
+| Command | What it does |
+|---------|--------------|
+| `toolchains list` | defined toolchains, installed or missing, and `ENV_DIR` |
+| `toolchains verify [name...]` | runs each toolchain's scratch program through the real runner and prints its output |
+| `exercises verify [chNN[/id]...]` | runs every exercise's solution (must pass all checks) and starter (must fail one) exactly like the Run button, and evaluates the checks |
+| `content lint` | JSON, per-locale files, quiz answer/choice parity, correct-answer-never-longest, missing starter/solution files, check patterns, emoji |
 
 ## Project structure
 
@@ -110,7 +121,8 @@ content/
   course.json            # manifest (see Configuration)
   toolchains.json        # how panes build & run (see Toolchains)
   chapters/chNN/         # sections/, quizzes/, exercises.json,
-                         # starter/, solution/, summary, glossary, quiz, assets/
+                         # starter/<exercise-id>/, solution/<exercise-id>/,
+                         # summary, glossary, quiz, assets/
 ```
 
 ## Theming
@@ -142,16 +154,17 @@ A toolchain is an entry in `content/toolchains.json`:
 
 ```json
 {
-  "name": "rust-cargo", "label": "Rust (Cargo)", "detect": ["cargo"],
-  "sources": ["*.rs"], "stage": ["Cargo.toml", "Cargo.lock"],
-  "layout": { "*.rs": "src" }, "workspace": "persistent",
-  "build": "cargo build --quiet --offline",
-  "run": "exec cargo run --quiet --offline -- \"$@\"",
-  "scratch": [{ "name": "main.rs", "content": "…" }, { "name": "Cargo.toml", "content": "…" }]
+  "name": "cpp-make", "label": "C++ (make)", "detect": ["make", "c++"],
+  "sources": ["*.cpp"], "stage": ["*.hpp", "Makefile"],
+  "layout": { "*.hpp": "include" }, "workspace": "persistent",
+  "env": { "CXXFLAGS": "-std=c++17 -Wall -Iinclude" },
+  "build": "make -s prog",
+  "run": "exec ./prog \"$@\"",
+  "scratch": [{ "name": "main.cpp", "content": "…" }, { "name": "Makefile", "content": "…" }]
 }
 ```
 
-Commands see `$ENTRY` (first source file of the pane), `$SRCS`, and `$ENV_DIR` — the playbook's private environment for venvs, libraries and prefetched dependencies (`--env-dir`, else `$PLAYBOOK_ENV_DIR`, else `<data>/env`; its `bin/` is first on `PATH`). `workspace: "persistent"` keeps a pane's build directory between Runs so make/cargo/gradle stay incremental. Full schema and patterns: [`playbook-generate/reference.md`](.claude/skills/playbook-generate/reference.md#toolchainsjson).
+Commands see `$ENTRY` (first source file of the pane), `$SRCS`, and `$ENV_DIR` — the playbook's private environment for venvs, libraries and prefetched dependencies (`--env-dir`, else `$PLAYBOOK_ENV_DIR`, else `<data>/env`; its `bin/` is first on `PATH`). `workspace: "persistent"` keeps a pane's build directory between Runs so make/cargo/gradle stay incremental. `detect` can also name paths (`$ENV_DIR/venv`), so a toolchain whose private environment was never set up shows as missing. Program output reaches the terminal and the checks with colour escape codes removed. Full schema and patterns: [`playbook-generate/reference.md`](.claude/skills/playbook-generate/reference.md#toolchainsjson).
 
 Presets shipped with the template:
 
@@ -199,14 +212,14 @@ docker build --build-arg TOOLCHAINS="c python" -t my-playbook .
 docker run -p 4360:4360 -v playbook-data:/data my-playbook
 ```
 
-`TOOLCHAINS` installs only what your curriculum scopes, using the recipes in `env/setup-debian.sh` (presets plus whatever `playbook-setup-env` added for your own toolchains); `$ENV_DIR` is baked into the image at `/opt/playbook-env`. The container runs as a non-root user and binds `0.0.0.0` **inside the container** only. ⚠️ The playground executes arbitrary code by design and the app has **no authentication or per-user separation** — one container = one learner (or a trusted household). Don't expose it to the public internet.
+Inside the container the app always listens on 4360, whatever `course.json`'s `port` says; choose the host side with `-p <host-port>:4360`. `TOOLCHAINS` installs only what your curriculum scopes (`playbook-setup-env` keeps the Dockerfile's default in sync), using the recipes in `env/setup-debian.sh` (presets plus whatever `playbook-setup-env` added for your own toolchains); `$ENV_DIR` is baked into the image at `/opt/playbook-env` and owned by the app user. The container runs as a non-root user and binds `0.0.0.0` **inside the container** only. ⚠️ The playground executes arbitrary code by design and the app has **no authentication or per-user separation** — one container = one learner (or a trusted household). Don't expose it to the public internet.
 
 ## Backend contract (stable interfaces)
 
 The backend is deliberately small (~1.8k lines of Go), and the frontend + all content depend on only four stable surfaces. Keep them intact and the backend can evolve freely — or even be reimplemented in another stack — without touching any playbook's content:
 
-1. **HTTP API**: `/api/course` (incl. `toolchains` availability + `toolchain_defs` name/label/scratch), `/api/section/{ch}/{id}`, `/api/progress`, `/api/chapter/{ch}/{summary,glossary,quiz[/{id}]}`, `/api/quiz/...{attempt,attempts}`, `/api/exercises/{ch}`, `/api/settings`, `/assets/{ch}/{name}` — same JSON shapes (see `internal/server/server.go`; note: quiz endpoints strip `answer`).
-2. **WebSocket** `/ws/run`: in `{op: run|stdin|kill, toolchain, files, args, data}` / out `{type: out|status|exit|error, data, code}`, one program per socket, pty semantics, process-group kill.
+1. **HTTP API**: `/api/course` (incl. `toolchains` availability + `toolchain_defs` name/label/scratch), `/api/section/{ch}/{id}`, `/api/progress`, `/api/chapter/{ch}/{summary,glossary,quiz[/{id}]}`, `/api/quiz/...{attempt,attempts}`, `/api/exercises/{ch}` (files per exercise in `exercise_files`), `/api/settings`, `/assets/{ch}/{name}` — same JSON shapes (see `internal/server/server.go`; note: quiz endpoints strip `answer`).
+2. **WebSocket** `/ws/run`: in `{op: run|stdin|kill, toolchain, pane, files, args, data}` (`pane` optional: keys the persistent workspace) / out `{type: out|status|exit|error, data, code}`, one program per socket, pty semantics, process-group kill.
 3. **Storage**: SQLite tables in `internal/store/store.go`; progress keys `chNN/<section-id>` must survive any change.
 4. **Toolchain definitions**: the `content/toolchains.json` schema — fields, `/bin/sh -c` execution with args as `"$@"`, the `$ENTRY` / `$SRCS` / `$ENV_DIR` variables, `$ENV_DIR/bin` first on `PATH` (see `internal/runner/runner.go`).
 
