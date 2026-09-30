@@ -65,7 +65,7 @@ The intended flow is agent-driven, as one chain or as separate steps:
 
 | Step | Skill | What it does |
 |------|-------|--------------|
-| all-in-one | `playbook-bootstrap` | chains the three steps below; you only approve at the gates |
+| all-in-one | `playbook-bootstrap` | chains the three steps below; you only approve at the gates (plan + installs + setup-coordinator model, then the auto-mode brief) |
 | 1. plan | `playbook-plan` | reads `document-sources/`, proposes a chapter/section syllabus + **toolchain scope** as `curriculum.md` for your approval |
 | 2. environment | `playbook-setup-env` | defines (`content/toolchains.json`), installs, records (`env/`) & verifies **only** the toolchains the plan scopes |
 | 3. content | `playbook-generate` | writes chapters (manual: one per invocation; auto: parallel sub-agents with a pre-flight brief you approve) |
@@ -172,7 +172,23 @@ A pane that fails with *toolchain not installed* or *unknown toolchain* means th
 
 ## Bundled skills (`.claude/skills/`)
 
-`playbook-bootstrap` (the chain), `playbook-plan` (curriculum + toolchain scope), `playbook-setup-env` (scoped installs, verified with the runner's own commands), `playbook-generate` (content; auto mode shows a pre-flight brief — task→model table **and the sub-agent verification criteria** — before spawning anything). Schemas live in `playbook-generate/reference.md`.
+| Skill | Role |
+|-------|------|
+| `playbook-bootstrap` | the whole chain; the session acts as **PM** — talks to you, holds the gates, delegates, checks results |
+| `playbook-plan` | `curriculum.md`: syllabus + toolchain/environment scope; approving it approves the installs |
+| `playbook-setup-env` | **setup coordinator**: writes toolchain definitions + recipes, hands installs to workers, re-verifies with `toolchains verify` |
+| `playbook-generate` | content; auto mode shows a pre-flight brief — task→model table **and the sub-agent verification criteria** — before spawning anything |
+
+Under `playbook-bootstrap` the work is delegated hierarchically, and results travel back push-only — each level verifies its children and reports once to its parent; no level polls or watches another:
+
+```
+PM (the session — prefer Fable / Opus)
+├── setup coordinator    opus preferred, or sonnet — proposed by the PM, confirmed by you
+│   └── install workers  haiku for plain installs, sonnet when a sub-task may need troubleshooting
+└── chapter writers      opus / sonnet by task
+```
+
+Roles, model tiers and the reporting protocol live in one file, `playbook-bootstrap/agents.md`; content schemas in `playbook-generate/reference.md`.
 
 ## Self-hosting with Docker
 

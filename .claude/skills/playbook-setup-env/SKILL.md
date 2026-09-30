@@ -1,60 +1,96 @@
 ---
 name: playbook-setup-env
-description: Detect and set up the toolchains a playbook's exercises need (C compiler, Python, Node.js, Kotlin CLI, JDK). Use when playground panes fail with "toolchain not installed", before generating exercises for a new language, or when the user asks to set up / check the environment.
+description: Set up the environment a playbook's exercises need — define the toolchains in content/toolchains.json (presets for C, C++, Python, Node.js, Kotlin, Java, Rust/Cargo, or custom ones for make, Gradle, a Python venv with libraries, Cargo crates, ...), install them locally, record reproducible recipes for local and hosted (Docker) setups, and verify with the playground's own runner. Use when playground panes fail with "toolchain not installed" / "unknown toolchain", before generating exercises for a new language or build tool, or when the user asks to set up / check the environment.
 ---
 
 # Set up the playbook environment
 
-Make sure every toolchain this playbook actually uses works on this machine — and install NOTHING beyond that scope.
+The playground is only an interface: it stages the pane's files, runs a toolchain's `build` and `run` shell commands in a pty, and forwards args and stdin. **What those commands can use is whatever this machine (local) or the container (host) provides** — and setting that up is this skill's job. Three artefacts come out of it:
 
-## 1. Figure out what's needed (scope first!)
+| Artefact | What it is |
+|----------|------------|
+| `content/toolchains.json` | how each toolchain stages files and builds/runs them (schema: [playbook-generate/reference.md](../playbook-generate/reference.md#toolchainsjson)) |
+| the installed environment | system packages + the playbook's private `$ENV_DIR` (venvs, libraries, prefetched deps, extra binaries in `$ENV_DIR/bin`) |
+| `env/setup-macos.sh`, `env/setup-debian.sh` | reproducible recipes — another machine, or `docker build`, gets the same environment |
+
+**Your role: setup coordinator** (see [agent hierarchy](../playbook-bootstrap/agents.md)). You own the judgment work — scope, definitions, recipes — and the final verification. The installs go to cheaper workers when that pays off (step 4). Under `playbook-bootstrap` you are a sub-agent (`opus` or `sonnet`, as the user confirmed with the PM) reporting to the PM; invoked directly by the user, you are the session itself.
+
+## 1. Scope first
 
 In priority order:
 
-1. **`curriculum.md`'s `toolchains:` line** (from the `playbook-plan` skill) — the authoritative scope for a playbook being built. If it exists, install exactly this list, nothing more.
-2. Otherwise scan what already ships: pane `toolchain` values in `content/chapters/*/exercises.json`, plus `default_toolchain` in `content/course.json`.
-3. The running server also reports availability: `curl -s localhost:<port>/api/course` → `"toolchains": {"c": true, "python": true, …}`.
+1. **`curriculum.md`** (from `playbook-plan`): its `toolchains:` line names the toolchains, its `environment:` block says what each needs beyond a preset (build tool, libraries, versions). This is the authoritative scope — set up exactly this, nothing more.
+2. Otherwise scan what ships: pane `toolchain` values in `content/chapters/*/exercises.json`, plus `default_toolchain` in `content/course.json`.
+3. Current state: `go run . toolchains list` prints `ENV_DIR=…` and installed/missing per defined toolchain.
 
-Never install the full toolchain list "just in case" — JVM installs are big and slow, and unused toolchains are pure waste. If the user asks for everything, confirm once that they really want out-of-scope installs.
+Never install the world "just in case" — JVM and build-tool installs are big and slow. If the user asks for everything, confirm once.
 
-**Ask, don't guess**: unclear scope, a version choice that matters, or anything that changes the user's machine beyond the obvious — ask first instead of assuming.
+**Ask, don't guess**: unclear scope, a version choice that matters, a library the source uses but doesn't name, or anything that changes the user's machine beyond the obvious — ask first (as a sub-agent: stop and put the question in your report; the PM asks the user).
 
-## 2. Check what's installed
+**Consent**: an APPROVED `curriculum.md` whose `environment:` block lists the installs (with size estimates) is the user's go-ahead. Without one, show the user what you will install, roughly how big it is, and why — and get an OK — before installing or spawning anything.
 
-| Toolchain | Required binaries | Check |
-|-----------|-------------------|-------|
-| `c` | `cc` | `cc --version` |
-| `cpp` | `c++` | `c++ --version` |
-| `python` | `python3` | `python3 --version` |
-| `node` | `node` | `node --version` |
-| `kotlin` | `kotlinc` AND `kotlin` | `kotlinc -version` (slow first run is normal) |
-| `java` | `javac` AND `java` | `javac --version` |
+## 2. Define the toolchains
 
-## 3. Install what's missing (macOS)
+For every toolchain in scope:
 
-Prefer Homebrew; tell the user what you're installing and why before running:
+- **A preset fits** (`c`, `cpp`, `python`, `node`, `kotlin`, `java`, `rust`, `rust-cargo` ship in `content/toolchains.json`): use it as-is.
+- **The source needs more** (a Makefile, Gradle, a library, crates): add a new entry — don't bend a preset, give it its own name (`cpp-make`, `kotlin-gradle`, `python-ds`, …). Follow the schema and design rules in reference.md; the examples there cover the common cases.
 
-- `c` / `cpp`: `xcode-select --install` (Command Line Tools ship both cc and c++; needs a user-confirmed GUI dialog — hand this to the user).
-- `python`: `brew install python3` (macOS usually ships one already).
-- `node`: `brew install node`
-- `kotlin`: `brew install kotlin` (installs the Kotlin CLI: `kotlinc` + `kotlin`; pulls a JDK dependency if none).
-- `java`: `brew install openjdk` — then follow brew's caveat to symlink it into the JDK path, or the `java`/`javac` on PATH won't see it.
+Rules that keep definitions healthy:
 
-On Linux, use the distro package manager equivalents (`build-essential`, `python3`, `nodejs`, `kotlin` via sdkman, `default-jdk`). If a needed install requires the user's password or a GUI step, stop and hand them the exact command instead of retrying.
+- `run` ends in `exec … "$@"` — the program replaces the shell (clean signals) and receives the pane's args intact.
+- **Run never touches the network.** Dependencies are installed or prefetched during setup; build commands use offline flags (`--offline`, `pip --no-index`, …).
+- Build tools that compile incrementally (make, cargo, gradle) get `"workspace": "persistent"`, and quiet flags (`-q`, `-s`) so their chatter doesn't pollute check regexes.
+- Playbook-private installs live in `$ENV_DIR`, referenced from definitions as `$ENV_DIR/...` — never `pip install` globally or `npm -g`.
+- Array order is extension-inference priority; keep `sources` patterns of competing toolchains ordered so the common one comes first.
+- Give every definition a `scratch` program that exercises what's special about it (e.g. `import numpy`, a crate `use`) — it is the smoke test in step 5.
+- Leave unused presets in place unless the user wants a lean file; never remove one referenced by exercises or `default_toolchain`.
 
-## 4. Verify for real
+## 3. Write the recipes (you, not workers)
 
-For each required toolchain, run a hello-world through the SAME commands the app's runner uses, in a temp dir:
+`$ENV_DIR` comes from `go run . toolchains list`. For every toolchain in scope, make sure `env/setup-macos.sh` and `env/setup-debian.sh` each have a `case` that installs everything it needs (the Dockerfile runs the Debian one as root with `PLAYBOOK_ENV_DIR=/opt/playbook-env`). Workers only run these recipes, so this is where installs are decided:
 
-- `c`: `cc -Wall -Wextra -O0 -o prog hello.c && ./prog`
-- `cpp`: `c++ -std=c++17 -Wall -Wextra -O0 -o prog hello.cpp && ./prog`
-- `python`: `python3 -u hello.py`
-- `node`: `node hello.js`
-- `kotlin`: `kotlinc main.kt -d prog.jar && kotlin -classpath prog.jar MainKt` (entry `main.kt` ⇒ class `MainKt`)
-- `java`: `javac -d . Main.java && java Main`
+- macOS: prefer Homebrew. `c`/`cpp` need `xcode-select --install` (a GUI dialog — the user must do it). `java`: brew's openjdk symlink caveat. `rust`/`rust-cargo`: keep an existing rustup setup, else `brew install rust` — it pulls in Homebrew's llvm (~2 GB total); `brew install rustup && rustup-init -y --profile minimal` (~0.5 GB) is the lean alternative, a choice for the user.
+- Linux: the distro package manager (`build-essential`, `python3`, `nodejs`, `default-jdk`, rustup for Rust — distro `rustc` is often too old).
+- Playbook-private pieces into `$ENV_DIR`, e.g. `python3 -m venv "$ENV_DIR/venv" && "$ENV_DIR/venv/bin/pip" install -r env/requirements.txt`; `cargo fetch` in a temp crate with the exercises' `Cargo.toml`; one online `gradle build` so `--offline` works later. Pin the files recipes need (`env/requirements.txt`, `env/Cargo.toml`, …) next to them.
+- **Guard system installs** (`need kotlinc || brew install kotlin`, `command -v … ||` before `apt-get`) so re-running a case — or running several cases at once after the system packages are in — never touches the package manager again.
 
-Clean up temp files afterwards. Note: kotlin/java compiles are slow (seconds) — warn content authors that heavy JVM exercises make the Run button feel sluggish; prefer small single-file programs.
+## 4. Install
 
-## 5. Report
+**Do it yourself** when at most one toolchain needs installing and none has a private-environment part: run `sh env/setup-<os>.sh <name>` and go to step 5.
 
-Tell the user, per toolchain: installed & verified / newly installed / needs their action (with the exact command). If the playbook server is running, remind them a restart is NOT needed — toolchain lookup happens per Run.
+**Otherwise delegate to workers in two phases**:
+
+1. **System packages — one worker.** Package managers hold a global lock (Homebrew, apt), so they are never parallelized. Compose ONE command that installs every missing system package from the recipes (e.g. `brew install kotlin rust gradle`; Homebrew parallelizes the downloads itself) and hand it to a single worker.
+2. **Private environments — one worker per toolchain, in parallel.** Each runs `sh env/setup-<os>.sh <name>` (its system part is now a guarded no-op) and then `go run . toolchains verify <name>`. Skip toolchains that have no private part: phase 1 plus your own verification covers them.
+
+**Pick each worker's model by its sub-task** (tiers in [agents.md](../playbook-bootstrap/agents.md)): `haiku` when the brief is one exact, guarded command — the phase-1 package install, a plain recipe case; `sonnet` when the sub-task may need diagnosis within its brief — a private env with a build step (Gradle warm-up, `cargo fetch` of real crates, pip packages with native extensions), a multi-step recipe. Never above your own model.
+
+**How to spawn**: all workers of a phase in ONE message, each with its `model` and `run_in_background: false`. They run concurrently, and every worker's report reaches you (inline or as a hand-back message) before you continue — no polling, no waiting turn. Even when you are the session yourself, keep this: the phases are short and you need the results to proceed. (Background spawns don't suit a sub-agent coordinator: it would be handed back early with a partial report, and its parent woken twice.)
+
+**Worker brief** (self-contained — the worker knows nothing else):
+
+- the project root and the exact commands to run, in order;
+- never edit repository files, never use `sudo`, never work around a denied permission;
+- password prompt or GUI dialog → stop and report the exact command for the user;
+- a failure → `haiku`: at most one retry if it looks transient (network), then stop and report the exact command and the relevant output lines; `sonnet`: may also diagnose (read logs, check versions) and retry a corrected invocation of the *same* install — a definition or recipe bug still goes into the report for you to fix, never into a repository edit;
+- final report = one line per command: ok / failed (+ evidence) / needs user, plus the `toolchains verify` output verbatim. No logs, no narration.
+
+## 5. Verify for real (always you)
+
+Don't trust worker reports — re-check with your own cheap, objective commands:
+
+```bash
+go run . toolchains verify <name> [<name>...]   # every toolchain in scope
+git status --short                              # workers must not have changed anything
+```
+
+`verify` runs each toolchain's `scratch` program through the playground's own runner — same staging, env, and commands as the Run button — and prints PASS/FAIL (exit code 0 or not) followed by the program's output. Everything in scope must PASS **and** print what its scratch is meant to print — read the output, exit 0 alone isn't proof. Also run one real exercise starter per custom toolchain once it exists. A FAIL caused by a definition or recipe is yours to fix (then re-verify); one caused by the machine goes into the report.
+
+## 6. Report
+
+To the user, or to the PM when you are a sub-agent (compact, per [agents.md](../playbook-bootstrap/agents.md)):
+
+- one row per toolchain: preset or custom / already present · newly installed (package + version) / verified ✓ · failed (evidence) · needs user (exact command);
+- the worker models used (one line), side effects worth knowing (large dependencies, upgraded packages) and the recipe/definition files you changed;
+- if the playbook server is running: new or edited `toolchains.json` entries need a rebuild + restart (content is embedded); installs alone don't — detection happens per Run.

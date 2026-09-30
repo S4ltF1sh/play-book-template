@@ -12,7 +12,8 @@ Turn the approved curriculum into chapters for the app in this project (built fr
 This skill runs off `curriculum.md` at the project root (produced by the `playbook-plan` skill):
 
 - No `curriculum.md`, or `status: DRAFT` → run `playbook-plan` first (or tell the user to). Do NOT invent a syllabus inline.
-- Check the plan's `toolchains:` scope against the machine (`/api/course` → `toolchains` map, or `command -v`): anything missing → run `playbook-setup-env` for exactly those toolchains before generating exercises that need them.
+- Check the plan's `toolchains:` scope against the machine (`go run . toolchains list`, or `/api/course` → `toolchains` map): anything undefined or missing → run `playbook-setup-env` for exactly those toolchains before generating exercises that need them.
+- Read each scoped toolchain's definition in `content/toolchains.json` before writing starters: it decides the entry-file name, which files get staged (and where), and what the build step prints.
 - The plan's license note governs how you handle source text (paraphrase/translate vs. verbatim).
 
 ## Generation modes
@@ -27,19 +28,13 @@ This session's agent generates ONE chapter per invocation, following reference.m
 
 You are planner/PM/final reviewer ONLY — sub-agents write the content.
 
-**Model assignment (tier rules — actual versions resolve to the user's plan):**
-
-| Role | Model | Notes |
-|------|-------|-------|
-| Planner / PM / reviewer | the session itself — best available model | If a Fable-class model is available, ask the user to switch the session to it; otherwise ask them to switch to the newest Opus. Do not proceed on a small model. |
-| Creative tasks: translation, content writing, UI/design | `opus` sub-agents | |
-| Other code tasks: app fixes, tooling, runners | `sonnet` sub-agents | |
+**Model assignment**: follow the tier table and reporting rules in [playbook-bootstrap/agents.md](../playbook-bootstrap/agents.md) (single source for all playbook skills) — creative work on `opus` sub-agents, other code tasks on `sonnet`, you on the best available model.
 
 **Pre-flight brief (mandatory before spawning anything).** Show the user, in one message, and let them override any part of it:
 
 1. The task→model assignment table (one row per planned sub-agent).
 2. **The verification criteria the sub-agents will be held to** — spell them out so the user can tighten/loosen them up front:
-   - every starter/solution file compiles and runs with the real toolchain (agents run it themselves, in a pty when interactivity matters);
+   - every starter/solution file builds and runs through its toolchain's definition (agents run it themselves, in a pty when interactivity matters);
    - every check regex is verified against actual program output (e.g. `node -e` RegExp tests) and satisfiable in a single run per pane;
    - all JSON validates (`python3 -m json.tool`); vi/en quiz answer indexes match; both locales fully written (no fallback);
    - coverage target (~85–90% of the source part) and license handling per the plan.
@@ -49,9 +44,9 @@ Spawn only after the user approves the brief (or explicitly says to use defaults
 
 **Parallel-safety rules (non-negotiable):**
 
-- One agent per chapter; each agent may write ONLY inside its own `content/chapters/chNN/` directory.
+- One agent per chapter; each agent may write ONLY inside its own `content/chapters/chNN/` directory. `content/toolchains.json` and `env/` are off-limits to chapter agents — a needed toolchain change is an incident for you (then `playbook-setup-env`).
 - `course.json` is merged by YOU: each agent writes its chapter entry to the scratchpad as `chNN-course-entry.json`; you merge, build, and restart.
-- Agents must self-test before reporting: compile all starter/solution files with the real toolchain, run them, verify every check regex against actual output (e.g. via `node -e` RegExp tests), and validate all JSON with `python3 -m json.tool`.
+- Agents must self-test before reporting: build and run all starter/solution files with the exact `build`/`run` commands of their toolchain in `content/toolchains.json` (same staging/layout), verify every check regex against actual output (e.g. via `node -e` RegExp tests), and validate all JSON with `python3 -m json.tool`.
 
 **Anomaly protocol (sub-agents):** every agent's prompt must include: on hitting anything abnormal (source contradicts itself, a check can't be satisfied, a toolchain is missing, a file it needs is outside its sandbox), the agent STOPS early and reports the problem in its final output instead of improvising, and also appends one line to `<scratchpad>/incidents.md` (`chNN: <what> — <blocked|worked around>`). You (the orchestrator) check `incidents.md` every time you wake up, and address incidents before merging.
 
