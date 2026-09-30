@@ -25,6 +25,9 @@ type Manifest struct {
 	AppID string `json:"app_id"`
 	// Brand is the short name shown in the topbar and breadcrumbs.
 	Brand map[string]string `json:"brand"`
+	// BrandIcon names a built-in line icon for the topbar + favicon
+	// (see ICONS in web/app.js); "" means the default, "none" hides it.
+	BrandIcon string `json:"brand_icon,omitempty"`
 	// Tagline/Subtitle fill the home hero.
 	Tagline  map[string]string `json:"tagline"`
 	Subtitle map[string]string `json:"subtitle"`

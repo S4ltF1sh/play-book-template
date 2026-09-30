@@ -6,7 +6,7 @@
 
 | Loại section | Cách mở khóa bài tiếp theo |
 |--------------|---------------------------|
-| **Đọc** (như trang này) | bấm "Đánh dấu đã học ✓" |
+| **Đọc** (như trang này) | bấm "Đánh dấu đã học" |
 | **Quiz xen kẽ** | trả lời đúng *tất cả* câu hỏi (được làm lại) |
 | **Bài tập** | chạy code đạt đủ tiêu chí chấm tự động |
 
@@ -16,7 +16,7 @@ Cuối mỗi chương luôn có **Tóm tắt & Thuật ngữ** và **Trắc nghi
 
 - Mỗi bài tập có 1 hoặc 2 pane code, tùy đề bài. Hai pane chạy **độc lập** — đủ để mô phỏng client/server.
 - Code chạy **thật trên máy bạn** qua pty: gõ input ở ô dưới cùng, truyền tham số ở ô `args:`.
-- Tab **🧪 Scratch** luôn có sẵn để thử nhanh bất kỳ đoạn code nào.
+- Tab **Scratch** luôn có sẵn để thử nhanh bất kỳ đoạn code nào.
 - Template hỗ trợ nhiều toolchain: `c`, `cpp`, `python`, `node`, `kotlin`, `java` — mỗi pane khai báo toolchain riêng trong `exercises.json`.
 
 > Thử ngay: sang phần quiz rồi bài tập ở mục kế tiếp — bạn sẽ đi qua đủ ba cơ chế mở khóa.

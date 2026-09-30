@@ -1,6 +1,7 @@
 {
   "app_id": "playbook-template-demo",
   "brand": { "vi": "Playbook", "en": "Playbook" },
+  "brand_icon": "sprout",
   "tagline": { "vi": "Playbook Template", "en": "Playbook Template" },
   "subtitle": {
     "vi": "Khung playbook học tương tác — thay nội dung của bạn vào content/ là chạy: đọc, quiz, và chạy code thật trên máy bạn.",
@@ -18,8 +19,8 @@
       "status": "ready",
       "sections": [
         { "id": "welcome", "title": { "vi": "Chào mừng & cấu trúc playbook", "en": "Welcome & playbook structure" } },
-        { "id": "quiz-template-basics", "type": "quiz", "quiz": "template-basics", "title": { "vi": "✏️ Quiz nhanh: cơ chế học", "en": "✏️ Quick quiz: how learning works" } },
-        { "id": "hello-playground", "type": "exercise", "exercise": "hello-playground", "title": { "vi": "🧩 Bài tập: Hello, Playground", "en": "🧩 Exercise: Hello, Playground" } }
+        { "id": "quiz-template-basics", "type": "quiz", "quiz": "template-basics", "title": { "vi": "Quiz nhanh: cơ chế học", "en": "Quick quiz: how learning works" } },
+        { "id": "hello-playground", "type": "exercise", "exercise": "hello-playground", "title": { "vi": "Bài tập: Hello, Playground", "en": "Exercise: Hello, Playground" } }
       ],
       "has_quiz": true,
       "has_exercises": true,

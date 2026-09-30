@@ -1,0 +1,16 @@
+/* Design-token entry point — the ONE file to change to re-skin the shell.
+   styles.css and code-theme.css read only the variables listed under
+   "Theming" in README.md; any token set that defines them works.
+   Currently: Elevated Botanical Material 3 (@verdant/tokens dist/css,
+   copied verbatim into vendor/verdant/). Its per-component tokens
+   (components.css) and adaptive grid are not used by the shell, so they
+   are not imported (or vendored). */
+@import url("./vendor/verdant/fonts.css");
+@import url("./vendor/verdant/colors.css");
+@import url("./vendor/verdant/palettes.css");
+@import url("./vendor/verdant/typography.css");
+@import url("./vendor/verdant/spacing.css");
+@import url("./vendor/verdant/shape.css");
+@import url("./vendor/verdant/motion.css");
+@import url("./vendor/verdant/elevation.css");
+@import url("./vendor/verdant/state-layers.css");

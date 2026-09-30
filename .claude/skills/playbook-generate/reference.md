@@ -8,6 +8,7 @@ All paths are relative to `content/`. Every localized file exists in EVERY local
 {
   "app_id": "my-playbook",
   "brand": { "vi": "My Playbook", "en": "My Playbook" },
+  "brand_icon": "sprout",
   "tagline": { "vi": "…", "en": "…" },
   "subtitle": { "vi": "…", "en": "…" },
   "default_toolchain": "c",
@@ -21,6 +22,7 @@ All paths are relative to `content/`. Every localized file exists in EVERY local
 - `app_id` names the user-data dir (progress DB). Set once per playbook; NEVER rename later.
 - `default_toolchain`: `c` | `cpp` | `python` | `node` | `kotlin` | `java` — used by scratch panes and panes without their own `toolchain`.
 - `port`: default server port for this playbook (pick a unique one per playbook; `--port` still overrides).
+- `brand_icon` (optional): line icon shown before the brand and used as the favicon — `sprout` (default) | `book` | `code` | `terminal` | `flask` | `cpu` | `globe` | `layers` | `none`. Pick one that fits the subject.
 
 ## File checklist for chapter `chNN`
 
@@ -50,14 +52,15 @@ content/chapters/chNN/
   "status": "ready",
   "sections": [
     { "id": "reading-id", "title": { "vi": "…", "en": "…" } },
-    { "id": "quiz-something", "type": "quiz", "quiz": "<quiz-id>", "title": { "vi": "✏️ Quiz nhanh: …", "en": "✏️ Quick quiz: …" } },
-    { "id": "exercise-id", "type": "exercise", "exercise": "<exercise-id>", "title": { "vi": "🧩 Bài tập: …", "en": "🧩 Exercise: …" } }
+    { "id": "quiz-something", "type": "quiz", "quiz": "<quiz-id>", "title": { "vi": "Quiz nhanh: …", "en": "Quick quiz: …" } },
+    { "id": "exercise-id", "type": "exercise", "exercise": "<exercise-id>", "title": { "vi": "Bài tập: …", "en": "Exercise: …" } }
   ],
   "has_quiz": true, "has_exercises": true, "has_summary": true
 }
 ```
 
 - Section order = learning flow. Quizzes/exercises sit right after their theory. Summary/glossary/final quiz are NOT sections — they are served by `has_summary`/`has_quiz` and always come last in the nav chain (sections → summary → quiz → next chapter).
+- No emoji anywhere in titles or JSON copy (template style rule): the shell draws its own line icons, and emoji clash with them.
 - Section `id` becomes the progress key `chNN/<id>` — never rename once shipped.
 - `"status": "planned"` shows the chapter greyed out; flip to `"ready"` when complete.
 
@@ -121,6 +124,23 @@ Same question schema, `"id": "chNN"`, 8–10 questions covering the whole chapte
 ```
 
 5–15 terms per chapter, `term` always English.
+
+## Inline markdown in JSON copy
+
+These JSON fields are rendered with a small inline-markdown subset (NOT full markdown — that is only for section `.md` files):
+`brief`, `tasks`, `solution.notes`, check `label`, quiz `prompt` / `choices` / `explanation`, glossary `def`.
+
+| Supported | Syntax |
+|-----------|--------|
+| code span | `` `x` `` |
+| bold / italic | `**x**`, `*x*`, `_x_` |
+| link | `[text](https://…)` (external opens in a new tab), `[text](#/…)`, `[text](/assets/…)` |
+| paragraphs | blank line (`\n\n`) in `brief` / `notes`; a single `\n` is a line break |
+| task list | one task per line in `tasks`; leading `- `, `* `, `1. `, `- [ ] ` markers are stripped (the UI draws its own bullet) |
+
+- NOT supported there: headings, nested lists, tables, block quotes, fenced code, images, raw HTML (HTML is escaped and shows as text).
+- ALWAYS wrap identifiers, commands, file names, and code in backticks. Unwrapped `*`/`_` are left literal only when they don't hug text on both sides (`a * b`, `f(*args, **kwargs)` are safe; `*ptr*` becomes italic).
+- The UI labels quiz choices A, B, C, D (in `choices` order), so an `explanation` may refer to them by letter. Letters depend on order: keep `choices` order identical across locales, like `answer`.
 
 ## Section markdown conventions
 

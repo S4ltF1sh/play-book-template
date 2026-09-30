@@ -15,6 +15,7 @@ A plug-and-play shell for building **interactive learning playbooks**: a single 
 - [Usage](#usage)
 - [Configuration](#configuration)
 - [Project structure](#project-structure)
+- [Theming](#theming)
 - [Toolchains](#toolchains)
 - [Bundled skills](#bundled-skills-claudeskills)
 - [Self-hosting with Docker](#self-hosting-with-docker)
@@ -75,6 +76,7 @@ All in `content/course.json`:
 |-------|---------|
 | `app_id` | names the user-data dir (progress DB). Set once, **never rename** |
 | `brand`, `tagline`, `subtitle` | per-locale app name and home-hero text |
+| `brand_icon` | optional topbar/favicon line icon: `sprout` (default), `book`, `code`, `terminal`, `flask`, `cpu`, `globe`, `layers`, or `none` |
 | `default_toolchain` | used by Scratch panes and panes without their own `toolchain` |
 | `port` | this playbook's default port (`--port` overrides) |
 | `locales`, `default_locale` | content languages, fallback order |
@@ -91,11 +93,36 @@ internal/
   server/    # HTTP API + playground WebSocket
   store/     # SQLite progress/settings/attempts
 web/         # SPA (vanilla JS + CodeMirror + highlight.js, vendored)
+  tokens.css             # design-token entry point (see Theming)
+  vendor/verdant/        # Elevated Botanical M3 tokens (generated CSS, verbatim)
+  styles.css             # shell styles — colours/type/shape only via token vars
+  code-theme.css         # One Dark Vivid Italic syntax for editor + code blocks
 content/
   course.json            # manifest (see Configuration)
   chapters/chNN/         # sections/, quizzes/, exercises.json,
                          # starter/, solution/, summary, glossary, quiz, assets/
 ```
+
+## Theming
+
+The shell is design-system agnostic: `styles.css` and `code-theme.css` never hard-code colours, fonts, radii or spacing. They read CSS variables, all loaded through one file, `web/tokens.css`. The template ships with **Elevated Botanical Material 3** (Montserrat + Inter, dark-first) wired in, plus a light theme (topbar toggle; `data-theme="light"` on `<html>`, remembered per browser). UI icons are inline SVG line icons, and content uses no emoji.
+
+**Theming contract**: any token set that defines these variables can replace the shipped one. Material 3 token exports already use these names.
+
+| Group | Variables |
+|-------|-----------|
+| Colour roles | `--color-{primary,tertiary,error}` and `--color-on-{primary,tertiary,error}`; `--color-{primary,secondary,tertiary}-container` and their `--color-on-…-container`; `--color-surface`, `--color-surface-container{-lowest,-low,,-high,-highest}`, `--color-on-surface{,-variant}`; `--color-outline{,-variant}`; `--color-scrim-modal`; `--text-link`, `--text-success` |
+| Code chrome | `--palette-neutral-{5,10,100}`, `--palette-neutral-variant-{5,20,50,80}`, `--palette-primary-{25,80}` (or override the `--code-*` variables at the top of `code-theme.css`) |
+| Typography | `--font-display`, `--font-body`; `--type-{display-lg-mobile,headline-md,title-md,body-lg,body-md,label-lg,label-md,label-sm}-{size,line,tracking}` (as used) |
+| Shape / space | `--shape-{xs,sm,md,lg,full}`, `--shape-{button-border-radius-m,card-border-radius,chip-border-radius-all,input-border-radius-s}`; `--space-{xxs,xs,sm,base,md,lg,xl,2xl,3xl}` |
+| Motion / depth | `--motion-duration-{short-3,medium-1}`, `--motion-easing-{standard,emphasized}`; `--elevation-level-{1,3}`; `--z-{drawer,scrim}` |
+| States | `--state-{hover,pressed}-pct`; `--focus-ring-{color,width,offset}` |
+
+Dark values go on `:root`, and light values go under `[data-theme="light"]`. Run `grep -oh 'var(--[a-z0-9-]*' web/*.css | sort -u` to get the exact list.
+
+- **Resync Elevated Botanical**: run `npm run tokens` in the design-system repo. Then copy the files that `web/tokens.css` imports from `packages/tokens/dist/css/` into `web/vendor/verdant/`.
+- **Swap the design system**: drop the new token CSS into `web/vendor/<name>/`, point the `@import`s in `web/tokens.css` at it, and fill any gaps in the contract with aliases in the same file (e.g. `--text-link: var(--color-primary);`).
+- **Code colours** (One Dark Vivid Italic) live in `web/code-theme.css`. Code surfaces stay dark in both themes.
 
 ## Toolchains
 

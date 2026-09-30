@@ -1,0 +1,78 @@
+/* Code surfaces (CodeMirror editor, highlight.js blocks, terminal).
+   Syntax colours: One Dark Vivid Italic. Chrome (background, gutter, cursor,
+   selection) comes from the Elevated Botanical palette. Code stays dark in
+   both app themes, so these tokens are not redefined under [data-theme="light"]. */
+
+:root {
+  --code-bg: var(--palette-neutral-5);
+  --code-term-bg: var(--palette-neutral-variant-5);
+  --code-border: var(--palette-neutral-variant-20);
+  --code-gutter: var(--palette-neutral-variant-50);
+  --code-gutter-active: var(--palette-neutral-variant-80);
+  --code-active-line: var(--palette-neutral-10);
+  --code-selection: var(--palette-primary-25);
+  --code-cursor: var(--palette-primary-80);
+
+  --code-fg: #abb2bf;
+  --code-comment: #7f848e;
+  --code-red: #ef596f;
+  --code-orange: #d19a66;
+  --code-yellow: #e5c07b;
+  --code-green: #89ca78;
+  --code-cyan: #2bbac5;
+  --code-blue: #61afef;
+  --code-purple: #d55fde;
+}
+
+/* ---------- CodeMirror 5: theme "one-dark-vivid" ---------- */
+.cm-s-one-dark-vivid.CodeMirror { background: var(--code-bg); color: var(--code-fg); }
+.cm-s-one-dark-vivid .CodeMirror-gutters { background: var(--code-bg); border-right: 1px solid var(--code-border); }
+.cm-s-one-dark-vivid .CodeMirror-linenumber { color: var(--code-gutter); }
+.cm-s-one-dark-vivid .CodeMirror-activeline-background { background: var(--code-active-line); }
+.cm-s-one-dark-vivid .CodeMirror-cursor { border-left: 2px solid var(--code-cursor); }
+.cm-s-one-dark-vivid div.CodeMirror-selected,
+.cm-s-one-dark-vivid.CodeMirror-focused div.CodeMirror-selected { background: var(--code-selection); }
+.cm-s-one-dark-vivid .CodeMirror-line::selection,
+.cm-s-one-dark-vivid .CodeMirror-line > span::selection,
+.cm-s-one-dark-vivid .CodeMirror-line > span > span::selection { background: var(--code-selection); }
+.cm-s-one-dark-vivid .CodeMirror-matchingbracket { color: var(--code-fg) !important; text-decoration: underline; }
+
+.cm-s-one-dark-vivid .cm-comment { color: var(--code-comment); font-style: italic; }
+.cm-s-one-dark-vivid .cm-keyword { color: var(--code-purple); font-style: italic; }
+.cm-s-one-dark-vivid .cm-meta { color: var(--code-purple); font-style: italic; }
+.cm-s-one-dark-vivid .cm-string, .cm-s-one-dark-vivid .cm-string-2 { color: var(--code-green); }
+.cm-s-one-dark-vivid .cm-number, .cm-s-one-dark-vivid .cm-atom { color: var(--code-orange); }
+.cm-s-one-dark-vivid .cm-def { color: var(--code-blue); }
+.cm-s-one-dark-vivid .cm-variable { color: var(--code-fg); }
+.cm-s-one-dark-vivid .cm-variable-2 { color: var(--code-red); }
+.cm-s-one-dark-vivid .cm-variable-3,
+.cm-s-one-dark-vivid .cm-type { color: var(--code-yellow); font-style: italic; }
+.cm-s-one-dark-vivid .cm-property { color: var(--code-blue); }
+.cm-s-one-dark-vivid .cm-operator { color: var(--code-cyan); }
+.cm-s-one-dark-vivid .cm-builtin { color: var(--code-cyan); font-style: italic; }
+.cm-s-one-dark-vivid .cm-qualifier { color: var(--code-yellow); }
+.cm-s-one-dark-vivid .cm-tag { color: var(--code-red); }
+.cm-s-one-dark-vivid .cm-attribute { color: var(--code-orange); font-style: italic; }
+.cm-s-one-dark-vivid .cm-bracket, .cm-s-one-dark-vivid .cm-punctuation { color: var(--code-fg); }
+.cm-s-one-dark-vivid .cm-link { color: var(--code-cyan); text-decoration: underline; }
+.cm-s-one-dark-vivid .cm-error { color: var(--code-red); text-decoration: underline wavy; }
+
+/* ---------- highlight.js ---------- */
+pre code.hljs { display: block; overflow-x: auto; }
+.hljs { color: var(--code-fg); background: var(--code-bg); }
+.hljs-comment, .hljs-quote { color: var(--code-comment); font-style: italic; }
+.hljs-keyword, .hljs-doctag, .hljs-formula, .hljs-meta,
+.hljs-meta .hljs-keyword { color: var(--code-purple); font-style: italic; }
+.hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute,
+.hljs-meta .hljs-string { color: var(--code-green); }
+.hljs-number, .hljs-literal, .hljs-attr, .hljs-variable, .hljs-template-variable,
+.hljs-selector-attr, .hljs-selector-class, .hljs-selector-pseudo { color: var(--code-orange); }
+.hljs-title, .hljs-title.function_, .hljs-section, .hljs-link, .hljs-bullet,
+.hljs-symbol, .hljs-selector-id { color: var(--code-blue); }
+.hljs-type, .hljs-title.class_, .hljs-class .hljs-title { color: var(--code-yellow); font-style: italic; }
+.hljs-built_in { color: var(--code-cyan); font-style: italic; }
+.hljs-name, .hljs-selector-tag, .hljs-deletion, .hljs-subst { color: var(--code-red); }
+.hljs-params { color: var(--code-fg); font-style: italic; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+.hljs-link { text-decoration: underline; }

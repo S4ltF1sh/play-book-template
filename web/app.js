@@ -44,59 +44,115 @@ const hlClassFor = (file) => {
 };
 const defaultToolchain = () => state.course?.default_toolchain || "c";
 
-const LANG_META = { vi: "🇻🇳 Tiếng Việt", en: "🇺🇸 English" };
+const LANG_META = { vi: "Tiếng Việt", en: "English" };
+
+// Line icons (24px grid, 2px rounded stroke) — the design system never uses emoji.
+const ICONS = {
+  sprout: '<path d="M12 21v-9"/><path d="M12 12C12 7.6 8.9 5 4 5c0 4.4 3.1 7 8 7z"/><path d="M12 15c0-3.9 2.7-6.5 8-6.5 0 3.9-2.7 6.5-8 6.5z"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+  cpu: '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 10h4v4h-4zM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+  chevron: '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.8 2.8L16 10"/>',
+  play: '<path d="M7 5.5v13a.5.5 0 0 0 .8.4l10-6.5a.5.5 0 0 0 0-.8l-10-6.5a.5.5 0 0 0-.8.4z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  code: '<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>',
+  flask: '<path d="M9 3h6M10 3v6.2L4.6 18.4A1.7 1.7 0 0 0 6.1 21h11.8a1.7 1.7 0 0 0 1.5-2.6L14 9.2V3"/><path d="M7.2 15h9.6"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  notes: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  quiz: '<circle cx="12" cy="12" r="9"/><path d="M9.3 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.5-2.7 2.5M12 16.8h.01"/>',
+  apply: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+};
+const ico = (name, cls = "") =>
+  `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
 const T = {
   vi: {
     summary: "Tóm tắt & Thuật ngữ", quiz: "Trắc nghiệm",
-    markDone: "Đánh dấu đã học ✓", marked: "Đã học ✓", prev: "← Trước", next: "Tiếp →",
+    markDone: "Đánh dấu đã học", marked: "Đã học", prev: "← Trước", next: "Tiếp →",
     nextCh: "Chương tiếp theo", planned: "sắp có", submit: "Nộp bài", retry: "Làm lại",
-    history: "Lịch sử làm bài", run: "▶ Run", stop: "■ Stop",
+    history: "Lịch sử làm bài", run: "Run", stop: "Stop",
     compiling: "đang biên dịch…", running: "đang chạy", exited: "đã thoát", idle: "sẵn sàng",
     args: "args:", stdinPh: "gõ input rồi Enter…", glossary: "Bảng thuật ngữ",
     score: "Điểm của bạn", tasks: "Nhiệm vụ", checksTitle: "Tiêu chí hoàn thành (chấm tự động)",
-    passed: "✅ Hoàn thành!", exercise: "🧩 Bài tập", scratchChip: "🧪 Scratch",
+    passed: "Hoàn thành", exercise: "Bài tập", scratchChip: "Scratch",
     gateReading: "Đánh dấu đã học để mở khóa bài tiếp theo",
     gateExercise: "Chạy code đạt đủ tiêu chí bên dưới để mở khóa bài tiếp theo",
     gateQuiz: "Trả lời đúng tất cả câu hỏi để mở khóa bài tiếp theo",
-    quizPerfect: "✅ Chính xác tuyệt đối!",
+    quizPerfect: "Chính xác tuyệt đối",
     scratchBrief: "Playground tự do — hai pane độc lập, chạy code thật trên máy bạn. Muốn thử gì vừa đọc thì gõ vào đây, bấm Run.",
     homeTitle: "Học theo cách tương tác",
     homeSub: "Đọc, làm quiz, và chạy code thật trên chính máy của bạn.",
     sections: "mục", correctIs: "Đáp án đúng:", progressLbl: "Tiến độ",
     chapter: "Chương", loading: "Đang tải…", question: "Câu",
     playToggle: "Ẩn/hiện Playground", wsFail: "Không kết nối được server",
-    solutionTitle: "📖 Đáp án mẫu", applyToPane: "⤵ Chép vào editor",
-    useSolution: "Dùng đáp án & đánh dấu hoàn thành ✓",
+    themeToggle: "Đổi giao diện sáng/tối", toc: "Mục lục", langSel: "Ngôn ngữ",
+    solutionTitle: "Đáp án mẫu", applyToPane: "Chép vào editor",
+    useSolution: "Dùng đáp án & đánh dấu hoàn thành",
     applyConfirm: "Thao tác này sẽ thay code hiện tại trong editor bằng đáp án mẫu. Tiếp tục?",
   },
   en: {
     summary: "Summary & Glossary", quiz: "Quiz",
-    markDone: "Mark as done ✓", marked: "Done ✓", prev: "← Prev", next: "Next →",
+    markDone: "Mark as done", marked: "Done", prev: "← Prev", next: "Next →",
     nextCh: "Next chapter", planned: "soon", submit: "Submit", retry: "Retry",
-    history: "Attempt history", run: "▶ Run", stop: "■ Stop",
+    history: "Attempt history", run: "Run", stop: "Stop",
     compiling: "compiling…", running: "running", exited: "exited", idle: "ready",
     args: "args:", stdinPh: "type input, press Enter…", glossary: "Glossary",
     score: "Your score", tasks: "Tasks", checksTitle: "Completion criteria (auto-graded)",
-    passed: "✅ Passed!", exercise: "🧩 Exercise", scratchChip: "🧪 Scratch",
+    passed: "Passed", exercise: "Exercise", scratchChip: "Scratch",
     gateReading: "Mark this section as done to unlock the next one",
     gateExercise: "Run your code until every criterion below passes to unlock the next section",
     gateQuiz: "Answer every question correctly to unlock the next section",
-    quizPerfect: "✅ Perfect score!",
+    quizPerfect: "Perfect score",
     scratchBrief: "Free playground — two independent panes running real code on your machine.",
     homeTitle: "Learn interactively",
     homeSub: "Read, take quizzes, and run real code on your own machine.",
     sections: "sections", correctIs: "Correct answer:", progressLbl: "Progress",
     chapter: "Chapter", loading: "Loading…", question: "Q",
     playToggle: "Show/hide playground", wsFail: "Could not connect to the server",
-    solutionTitle: "📖 Sample solution", applyToPane: "⤵ Copy into editor",
-    useSolution: "Use solution & mark as done ✓",
+    themeToggle: "Toggle light/dark theme", toc: "Table of contents", langSel: "Language",
+    solutionTitle: "Sample solution", applyToPane: "Copy into editor",
+    useSolution: "Use solution & mark as done",
     applyConfirm: "This will replace the current code in the editor with the sample solution. Continue?",
   },
 };
 const t = (k) => (T[state.locale] || T.vi)[k] ?? T.vi[k] ?? k;
 const loc = (m) => (m && (m[state.locale] || m.vi || m.en || Object.values(m)[0])) || "";
 const brand = () => loc(state.course?.brand) || "Playbook";
+// course.json "brand_icon": a name from ICONS (default "sprout") or "none".
+const brandIcon = () => {
+  const name = state.course?.brand_icon ?? "sprout";
+  return ICONS[name] ? name : null;
+};
+// Favicon = the brand icon stroked in the theme's primary colour.
+function setFavicon() {
+  const name = brandIcon();
+  const color = getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim();
+  const svg = name ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color || "currentColor"}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>` : "";
+  $("link[rel=icon]").href = svg ? `data:image/svg+xml,${encodeURIComponent(svg)}` : "data:,";
+}
+// Markdown in JSON copy (tasks, briefs, check labels, quiz text, glossary):
+// code spans, bold, italic, links. The source is escaped first, so nothing
+// else can turn into HTML.
+function mdInline(src) {
+  const codes = [];
+  let s = esc(src ?? "").replace(/`([^`\n]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  // Delimiters must hug their text (CommonMark flanking), so plain-text code
+  // such as f(*args, **kwargs), a * b, or __init__ stays literal.
+  s = s.replace(/(^|[^\w*])\*\*(?=[^\s*])(.+?)(?<=[^\s*])\*\*(?![\w*])/g, "$1<strong>$2</strong>")
+       .replace(/(^|[^\w*])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![\w*])/g, "$1<em>$2</em>")
+       .replace(/(^|[^\w])_(?=[^\s_])(.+?)(?<=[^\s_])_(?!\w)/g, "$1<em>$2</em>")
+       .replace(/\[([^\]]+)\]\(((?:https?:\/\/|#|\/)[^\s)]+)\)/g, (_, text, href) =>
+         `<a href="${href}"${/^https?:/.test(href) ? ' target="_blank" rel="noopener"' : ""}>${text}</a>`);
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+}
+// Paragraphs split on blank lines; single newlines become <br>.
+const mdBlock = (src) => (src || "").trim().split(/\n\s*\n/)
+  .map((p) => `<p>${p.split("\n").map(mdInline).join("<br>")}</p>`).join("");
+
+const doneLabel = (done) => done ? `${ico("check")}${esc(t("marked"))}` : esc(t("markDone"));
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
@@ -122,7 +178,8 @@ async function boot() {
   state.locale = data.locale || state.course.default_locale || "vi";
   state.toolchains = data.toolchains || {};
   document.title = brand();
-  $("#brand").innerHTML = `⚡ <b>${esc(brand())}</b>`;
+  $("#brand").innerHTML = `${brandIcon() ? ico(brandIcon()) : ""}<span>${esc(brand())}</span>`;
+  setFavicon();
   initTopbar();
   initPlayControls();
   renderSidebar();
@@ -134,6 +191,13 @@ function initTopbar() {
   $("#toc-toggle").onclick = () => $("#body").classList.toggle("drawer-open");
   $("#drawer-scrim").onclick = closeDrawer;
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+  $("#theme-toggle").onclick = () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("theme", next); } catch {}
+    setFavicon();
+  };
+  applyTopbarLabels();
 
   const sel = $("#lang-sel");
   sel.innerHTML = state.course.locales.map((l) =>
@@ -144,9 +208,18 @@ function initTopbar() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ locale: sel.value }),
     });
+    applyTopbarLabels();
     renderSidebar();
     route();
   };
+}
+
+function applyTopbarLabels() {
+  document.documentElement.lang = state.locale;
+  for (const [id, key] of [["toc-toggle", "toc"], ["theme-toggle", "themeToggle"], ["lang-sel", "langSel"], ["play-toggle", "playToggle"]]) {
+    $(`#${id}`).title = t(key);
+    $(`#${id}`).setAttribute("aria-label", t(key));
+  }
 }
 
 function closeDrawer() { $("#body").classList.remove("drawer-open"); }
@@ -175,8 +248,8 @@ function renderSidebar() {
     const head = document.createElement("div");
     head.className = "toc-chapter-head";
     head.innerHTML = ready
-      ? `<span class="chev">▶</span><span class="head-title">${esc(loc(ch.title))}</span><span class="ch-progress">${done}/${total}</span>`
-      : `<span class="chev" style="visibility:hidden">▶</span><span class="head-title">${esc(loc(ch.title))}</span><span class="badge">${t("planned")}</span>`;
+      ? `${ico("chevron", "chev")}<span class="head-title">${esc(loc(ch.title))}</span><span class="ch-progress">${done}/${total}</span>`
+      : `<svg class="ico chev" aria-hidden="true"></svg><span class="head-title">${esc(loc(ch.title))}</span><span class="badge">${t("planned")}</span>`;
     wrap.appendChild(head);
 
     if (ready) {
@@ -194,14 +267,14 @@ function renderSidebar() {
         items.appendChild(a);
       }
       const specials = [];
-      if (ch.has_summary) specials.push([`#/${ch.id}/summary`, "📋", t("summary")]);
-      if (ch.has_quiz) specials.push([`#/${ch.id}/quiz`, "✏️", t("quiz")]);
-      for (const [href, ico, label] of specials) {
+      if (ch.has_summary) specials.push([`#/${ch.id}/summary`, "notes", t("summary")]);
+      if (ch.has_quiz) specials.push([`#/${ch.id}/quiz`, "quiz", t("quiz")]);
+      for (const [href, icon, label] of specials) {
         const a = document.createElement("a");
         a.className = "toc-item special";
         a.href = href;
         a.onclick = closeDrawer;
-        a.innerHTML = `<span class="ico">${ico}</span><span>${esc(label)}</span>`;
+        a.innerHTML = `${ico(icon)}<span>${esc(label)}</span>`;
         if (current === href) a.classList.add("active");
         items.appendChild(a);
       }
@@ -313,7 +386,7 @@ async function renderSection(main, ch, sid) {
       ${prevHtml}
       <span class="spacer"></span>
       <span class="gate-hint" id="gate-hint" ${isDone ? "hidden" : ""}>${t("gateReading")}</span>
-      <button class="done-btn ${isDone ? "marked" : ""}">${isDone ? t("marked") : t("markDone")}</button>
+      <button class="done-btn tonal ${isDone ? "marked" : ""}">${doneLabel(isDone)}</button>
       ${nextHtml}
     </div>
   </div>`;
@@ -327,8 +400,8 @@ async function renderSection(main, ch, sid) {
     // the page may have been swapped out while setProgress was in flight
     const hint = $("#gate-hint", main);
     if (!hint) return;
-    e.target.classList.toggle("marked", nowDone);
-    e.target.textContent = nowDone ? t("marked") : t("markDone");
+    e.currentTarget.classList.toggle("marked", nowDone);
+    e.currentTarget.innerHTML = doneLabel(nowDone);
     hint.hidden = nowDone;
     setNextLocked(!nowDone);
   };
@@ -346,10 +419,10 @@ async function renderExerciseSection(main, ch, sec, idx) {
   const isDone = state.progress[fullId] === "done";
   const { prevHtml, nextHtml } = sectionNavLinks(ch, idx);
 
-  const tasks = loc(ex.tasks).split("\n").filter(Boolean)
-    .map((l) => `<li>${esc(l.replace(/^[-*]\s*/, ""))}</li>`).join("");
+  const tasks = loc(ex.tasks).split("\n").map((l) => l.trim()).filter(Boolean)
+    .map((l) => `<li>${mdInline(l.replace(/^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, ""))}</li>`).join("");
   const checks = (ex.checks || []).map((c, i) =>
-    `<li data-check="${i}">${esc(loc(c.label))}</li>`).join("");
+    `<li data-check="${i}">${mdInline(loc(c.label))}</li>`).join("");
 
   const sol = ex.solution;
   let solHtml = "";
@@ -357,14 +430,14 @@ async function renderExerciseSection(main, ch, sec, idx) {
     const solFilesHtml = (sol.files || []).map((f) => `
       <div class="sol-file">
         <div class="sol-file-head"><code>${esc(f)}</code>
-          <button class="sol-apply" data-f="${esc(f)}">${t("applyToPane")}</button></div>
+          <button class="sol-apply" data-f="${esc(f)}">${ico("apply")}${t("applyToPane")}</button></div>
         <pre><code class="language-${hlClassFor(f)}">${esc(solutionFiles[f] || "")}</code></pre>
       </div>`).join("");
     solHtml = `<details class="ex-solution">
-      <summary>${t("solutionTitle")}</summary>
-      <p class="sol-notes">${esc(loc(sol.notes))}</p>
+      <summary>${ico("book")}${t("solutionTitle")}</summary>
+      <div class="sol-notes">${mdBlock(loc(sol.notes))}</div>
       ${solFilesHtml}
-      <button class="sol-use">${t("useSolution")}</button>
+      <button class="sol-use tonal">${ico("check")}${t("useSolution")}</button>
     </details>`;
   }
 
@@ -372,7 +445,7 @@ async function renderExerciseSection(main, ch, sec, idx) {
     <div class="crumb"><a href="#/">${esc(brand())}</a> / ${esc(loc(ch.title))}</div>
     <div class="md">
       <h1>${esc(loc(ex.title))}</h1>
-      <p>${esc(loc(ex.brief))}</p>
+      ${mdBlock(loc(ex.brief))}
       <div class="ex-checks-title">${t("tasks")}</div>
       <ul class="ex-tasks">${tasks}</ul>
       ${checks ? `<div class="ex-checks-title">${t("checksTitle")}</div><ul class="ex-checks" id="ex-checks">${checks}</ul>` : ""}
@@ -583,6 +656,7 @@ function showScratch() {
   host.mode = "scratch";
   $("#play-chips").hidden = true;
   $("#check-badge").textContent = "";
+  $(".play-host-bar").hidden = true; // nothing to switch to outside an exercise
   scratchSlot();
   showSlot("scratch");
 }
@@ -601,8 +675,9 @@ function showExercise(ch, sec, ex, files) {
   slot.panes.forEach((p) => (p.onOutput = updateChecks));
   scratchSlot(); // make sure scratch exists for the chip
   $("#play-chips").hidden = false;
-  $("#chip-ex").textContent = t("exercise");
-  $("#chip-scratch").textContent = t("scratchChip");
+  $(".play-host-bar").hidden = false;
+  $("#chip-ex").innerHTML = ico("code") + esc(t("exercise"));
+  $("#chip-scratch").innerHTML = ico("flask") + esc(t("scratchChip"));
   setMode("exercise");
   updateChecks();
 }
@@ -623,14 +698,14 @@ function updateChecks() {
   const badge = $("#check-badge");
   const fullId = `${ctx.ch.id}/${ctx.sec.id}`;
   const already = state.progress[fullId] === "done";
-  if (!checks.length) { badge.textContent = ""; return; }
+  if (!checks.length) { badge.innerHTML = ""; return; }
   let allPass = true;
   checks.forEach((c, i) => {
     const pass = !!slot.panes[c.pane] && new RegExp(c.pattern).test(slot.panes[c.pane].outBuf);
     if (!pass) allPass = false;
     document.querySelector(`#ex-checks [data-check="${i}"]`)?.classList.toggle("pass", pass || already);
   });
-  badge.textContent = allPass || already ? t("passed") : "";
+  badge.innerHTML = allPass || already ? ico("checkCircle") + esc(t("passed")) : "";
   badge.classList.toggle("pass", allPass || already);
   if ((allPass || already)) {
     $("#gate-hint")?.setAttribute("hidden", "");
@@ -651,7 +726,7 @@ async function renderSummary(main, ch) {
   let gloss = "";
   if (glossary?.length) {
     gloss = `<h2>${t("glossary")}</h2><table class="glossary-table">` +
-      glossary.map((g) => `<tr><td>${esc(g.term)}</td><td>${esc(g.def)}</td></tr>`).join("") +
+      glossary.map((g) => `<tr><td>${esc(g.term)}</td><td>${mdInline(g.def)}</td></tr>`).join("") +
       `</table>`;
   }
   main.innerHTML = `<div class="page">
@@ -671,10 +746,10 @@ function quizQuestionsHTML(quiz) {
   return quiz.questions.map((q, i) => `
     <div class="quiz-q" data-qid="${q.id}">
       <div class="qnum">${t("question")} ${i + 1}/${quiz.questions.length}</div>
-      <div class="prompt">${esc(q.prompt)}</div>
+      <div class="prompt">${mdInline(q.prompt)}</div>
       ${q.choices.map((c, j) => `
         <label class="quiz-choice" data-idx="${j}">
-          <input type="radio" name="${q.id}" value="${j}"><span>${esc(c)}</span>
+          <input type="radio" name="${q.id}" value="${j}"><span class="letter">${String.fromCharCode(65 + j)}</span><span>${mdInline(c)}</span>
         </label>`).join("")}
       <div class="explanation" style="display:none"></div>
     </div>`).join("");
@@ -699,7 +774,7 @@ function applyQuizResults(scope, results) {
     if (r.chosen >= 0 && !r.is_correct) choices[r.chosen]?.classList.add("wrong");
     const ex = box.querySelector(".explanation");
     ex.style.display = "";
-    ex.textContent = (r.is_correct ? "✓ " : `✗ ${t("correctIs")} ${String.fromCharCode(65 + r.correct)}. `) + r.explanation;
+    ex.innerHTML = (r.is_correct ? "✓ " : `✗ ${esc(t("correctIs"))} ${String.fromCharCode(65 + r.correct)}. `) + mdInline(r.explanation);
   }
 }
 
@@ -790,7 +865,7 @@ async function renderQuizSection(main, ch, sec, idx) {
     const scoreEl = $("#quiz-score", main);
     scoreEl.innerHTML = `<div class="quiz-score compact">
       <div class="big">${res.score}/${res.total}</div>
-      ${perfect ? `<div class="perfect">${t("quizPerfect")}</div>` : ""}
+      ${perfect ? `<div class="perfect">${ico("checkCircle")}${t("quizPerfect")}</div>` : ""}
     </div>`;
     const btn = $("#quiz-submit", main);
     if (perfect || isDone) {
@@ -827,7 +902,7 @@ class Pane {
           `<span class="file-tab ${i === 0 ? "active" : ""}" data-f="${esc(f)}">${esc(f)}</span>`).join("")}</span>
         <span class="grow"></span>
         <span class="status">${t("idle")}</span>
-        <button class="run-btn primary">${t("run")}</button>
+        <button class="run-btn primary">${ico("play")}${t("run")}</button>
       </div>
       <div class="editor-wrap"></div>
       <div class="out-drag" title="⇕"></div>
@@ -841,7 +916,7 @@ class Pane {
     this.cm = CodeMirror($(".editor-wrap", root), {
       value: this.files[this.current] || "",
       mode: cmModeFor(this.current),
-      theme: "material-darker",
+      theme: "one-dark-vivid",
       lineNumbers: true,
       indentUnit: 4, tabSize: 4, indentWithTabs: false,
     });
@@ -898,7 +973,7 @@ class Pane {
     this.statusEl.textContent = text;
     this.statusEl.classList.toggle("running", !!running);
     this.running = !!running;
-    this.runBtn.textContent = running ? t("stop") : t("run");
+    this.runBtn.innerHTML = running ? ico("stop") + esc(t("stop")) : ico("play") + esc(t("run"));
     this.runBtn.classList.toggle("primary", !running);
   }
 
@@ -950,5 +1025,5 @@ class Pane {
 }
 
 boot().catch((e) => {
-  $("#main").innerHTML = `<div class="page"><p style="color:var(--red)">Lỗi khởi động: ${esc(e.message)}</p></div>`;
+  $("#main").innerHTML = `<div class="page"><p class="boot-error">Lỗi khởi động: ${esc(e.message)}</p></div>`;
 });
