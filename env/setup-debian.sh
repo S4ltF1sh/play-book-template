@@ -11,6 +11,10 @@
 # PATH for every build/run command.
 set -eu
 
+# files the recipes pin (requirements.txt, Cargo.toml, ...) live next to
+# this script: refer to them as "$HERE/..." — the working directory differs
+# between a local run (project root) and the Dockerfile (/)
+HERE=$(cd "$(dirname "$0")" && pwd)
 ENV_DIR="${PLAYBOOK_ENV_DIR:-/opt/playbook-env}"
 mkdir -p "$ENV_DIR/bin"
 
