@@ -17,17 +17,18 @@ import (
 )
 
 type Server struct {
-	mux     *http.ServeMux
-	content *content.Content
-	db      *store.Store
+	mux        *http.ServeMux
+	content    *content.Content
+	db         *store.Store
+	toolchains *runner.Registry
 }
 
-func New(contentFS, webFS fs.FS, db *store.Store) *Server {
+func New(contentFS, webFS fs.FS, db *store.Store, toolchains *runner.Registry) *Server {
 	c, err := content.Load(contentFS)
 	if err != nil {
 		log.Fatalf("cannot load course content: %v", err)
 	}
-	s := &Server{mux: http.NewServeMux(), content: c, db: db}
+	s := &Server{mux: http.NewServeMux(), content: c, db: db, toolchains: toolchains}
 
 	// no-cache so a rebuilt binary never serves stale embedded assets
 	fileSrv := http.FileServerFS(webFS)
@@ -88,7 +89,9 @@ func (s *Server) handleCourse(w http.ResponseWriter, r *http.Request) {
 		"course":     m,
 		"progress":   prog,
 		"locale":     s.db.Setting("locale", m.DefaultLocale),
-		"toolchains": runner.Available(),
+		"toolchains": s.toolchains.Available(),
+		// name/label/scratch per definition (no commands) for the scratch pane
+		"toolchain_defs": s.toolchains.Public(),
 	})
 }
 
@@ -137,7 +140,9 @@ func (s *Server) handleGlossary(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Locale string `json:"locale"` }
+	var req struct {
+		Locale string `json:"locale"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Locale == "" {
 		httpErr(w, 400, "bad request")
 		return
@@ -246,39 +251,47 @@ func (s *Server) handleExercises(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, 404, "no exercises")
 		return
 	}
-	// bundle starter + solution file contents so the client has everything in one call
+	// bundle starter + solution file contents so the client has everything
+	// in one call, per exercise: starter/<ex>/<file> shadows starter/<file>
+	type bundle struct {
+		Files         map[string]string `json:"files"`
+		SolutionFiles map[string]string `json:"solution_files"`
+	}
+	byEx := map[string]bundle{}
+	// flat maps (first exercise wins) kept for clients of the old shape
 	files := map[string]string{}
 	solutionFiles := map[string]string{}
+	add := func(dst, flat map[string]string, f string, b []byte) {
+		dst[f] = string(b)
+		if _, done := flat[f]; !done {
+			flat[f] = string(b)
+		}
+	}
 	for _, ex := range exs {
+		bd := bundle{map[string]string{}, map[string]string{}}
 		for _, p := range ex.Panes {
 			for _, f := range p.Files {
-				if _, done := files[f]; done {
-					continue
-				}
-				b, err := s.content.StarterFile(ch, f)
-				if err == nil {
-					files[f] = string(b)
+				if b, err := s.content.StarterFile(ch, ex.ID, f); err == nil {
+					add(bd.Files, files, f, b)
 				}
 			}
 		}
 		if ex.Solution != nil {
 			for _, f := range ex.Solution.Files {
-				if _, done := solutionFiles[f]; done {
-					continue
-				}
-				b, err := s.content.SolutionFile(ch, f)
-				if err == nil {
-					solutionFiles[f] = string(b)
+				if b, err := s.content.SolutionFile(ch, ex.ID, f); err == nil {
+					add(bd.SolutionFiles, solutionFiles, f, b)
 				}
 			}
 		}
+		byEx[ex.ID] = bd
 	}
-	writeJSON(w, map[string]any{"exercises": exs, "files": files, "solution_files": solutionFiles})
+	writeJSON(w, map[string]any{"exercises": exs, "exercise_files": byEx, "files": files, "solution_files": solutionFiles})
 }
 
 type wsIn struct {
 	Op        string        `json:"op"` // run | stdin | kill
 	Toolchain string        `json:"toolchain"`
+	Pane      string        `json:"pane"` // optional pane id, keys persistent workspaces
 	Files     []runner.File `json:"files"`
 	Args      []string      `json:"args"`
 	Data      string        `json:"data"`
@@ -296,8 +309,8 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	sess := runner.New()
-	defer sess.Kill()
+	sess := s.toolchains.NewSession(ctx)
+	defer sess.Close()
 
 	var wmu sync.Mutex
 	send := func(m wsOut) {
@@ -318,6 +331,7 @@ func (s *Server) handleRun(w http.ResponseWriter, r *http.Request) {
 		}
 		switch in.Op {
 		case "run":
+			sess.Pane = in.Pane
 			err := sess.Run(in.Toolchain, in.Files, in.Args,
 				func(out string) { send(wsOut{Type: "out", Data: out}) },
 				func(st string) { send(wsOut{Type: "status", Data: st}) },

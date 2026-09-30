@@ -32,7 +32,7 @@ type Manifest struct {
 	Tagline  map[string]string `json:"tagline"`
 	Subtitle map[string]string `json:"subtitle"`
 	// DefaultToolchain is used by scratch panes and panes with no toolchain
-	// of their own: "c" | "python" | "node" | "kotlin" | "java".
+	// of their own: a name from content/toolchains.json.
 	DefaultToolchain string    `json:"default_toolchain"`
 	Locales          []string  `json:"locales"`
 	DefaultLocale    string    `json:"default_locale"`
@@ -209,12 +209,23 @@ func (c *Content) Exercises(ch string) ([]Exercise, error) {
 	return ex, nil
 }
 
-func (c *Content) StarterFile(ch, name string) ([]byte, error) {
-	return fs.ReadFile(c.fsys, "chapters/"+ch+"/starter/"+name)
+// StarterFile reads a pane file of exercise ex: starter/<ex>/<name> if it
+// exists (per-exercise files, so two exercises may both use main.py), else
+// the chapter-wide starter/<name>.
+func (c *Content) StarterFile(ch, ex, name string) ([]byte, error) {
+	return c.exerciseFile(ch, "starter", ex, name)
 }
 
-func (c *Content) SolutionFile(ch, name string) ([]byte, error) {
-	return fs.ReadFile(c.fsys, "chapters/"+ch+"/solution/"+name)
+// SolutionFile is StarterFile for solution/.
+func (c *Content) SolutionFile(ch, ex, name string) ([]byte, error) {
+	return c.exerciseFile(ch, "solution", ex, name)
+}
+
+func (c *Content) exerciseFile(ch, kind, ex, name string) ([]byte, error) {
+	if b, err := fs.ReadFile(c.fsys, "chapters/"+ch+"/"+kind+"/"+ex+"/"+name); err == nil {
+		return b, nil
+	}
+	return fs.ReadFile(c.fsys, "chapters/"+ch+"/"+kind+"/"+name)
 }
 
 func (c *Content) Asset(ch, name string) ([]byte, error) {

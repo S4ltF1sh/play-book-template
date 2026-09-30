@@ -3,9 +3,14 @@
 #   docker build -t my-playbook .
 #   docker run -p 4360:4360 -v playbook-data:/data my-playbook
 #
+# Inside the container the app always listens on 4360; pick the host side
+# freely (-p 4362:4360). The playbook-setup-env skill keeps the TOOLCHAINS
+# default below in sync with the playbook's toolchain scope.
+#
 # TOOLCHAINS picks what gets installed in the runtime image — install ONLY
-# what this playbook's exercises use (see content/curriculum.md / the
-# playbook-plan skill). Space-separated from: c cpp python node kotlin java
+# what this playbook's exercises use (see curriculum.md / the playbook-plan
+# skill). Names come from content/toolchains.json; env/setup-debian.sh holds
+# the install recipe for each (presets + whatever the playbook defines).
 #
 #   docker build --build-arg TOOLCHAINS="c python" -t my-playbook .
 
@@ -19,27 +24,20 @@ RUN CGO_ENABLED=0 go build -o /playbook .
 
 # --- runtime stage ---
 FROM debian:bookworm-slim
-ARG TOOLCHAINS="c"
-RUN set -eux; \
-    apt-get update; \
-    for t in $TOOLCHAINS; do \
-      case "$t" in \
-        c)      apt-get install -y --no-install-recommends gcc libc6-dev ;; \
-        cpp)    apt-get install -y --no-install-recommends g++ libc6-dev ;; \
-        python) apt-get install -y --no-install-recommends python3 ;; \
-        node)   apt-get install -y --no-install-recommends nodejs ;; \
-        java)   apt-get install -y --no-install-recommends default-jdk-headless ;; \
-        kotlin) apt-get install -y --no-install-recommends default-jdk-headless unzip curl ca-certificates; \
-                curl -fsSL -o /tmp/kotlin.zip https://github.com/JetBrains/kotlin/releases/download/v2.1.0/kotlin-compiler-2.1.0.zip; \
-                unzip -q /tmp/kotlin.zip -d /opt; rm /tmp/kotlin.zip; \
-                ln -s /opt/kotlinc/bin/kotlinc /opt/kotlinc/bin/kotlin /usr/local/bin/ ;; \
-      esac; \
-    done; \
-    rm -rf /var/lib/apt/lists/*
-# the playground compiles and runs learner code — never run it as root
-RUN useradd -m -u 10001 playbook
+ARG TOOLCHAINS="c python"
+# $ENV_DIR baked into the image (outside the /data volume so it isn't
+# shadowed); rustup's rustc/cargo proxies read RUSTUP_HOME at run time
+ENV PLAYBOOK_ENV_DIR=/opt/playbook-env RUSTUP_HOME=/opt/rustup
+# the playground compiles and runs learner code — never run it as root;
+# /data exists and belongs to that user, so a fresh volume inherits it
+RUN useradd -m -u 10001 playbook && install -d -o playbook /data
+COPY env/ /tmp/env/
+# recipes run as root; afterwards the app user owns $ENV_DIR, because some
+# tools write into their cache even offline (cargo's package lock, gradle)
+RUN sh /tmp/env/setup-debian.sh $TOOLCHAINS && rm -rf /tmp/env \
+ && chown -R playbook "$PLAYBOOK_ENV_DIR"
 USER playbook
 COPY --from=build /playbook /usr/local/bin/playbook
 VOLUME /data
 EXPOSE 4360
-ENTRYPOINT ["playbook", "--no-open", "--host", "0.0.0.0", "--data", "/data"]
+ENTRYPOINT ["playbook", "--no-open", "--host", "0.0.0.0", "--port", "4360", "--data", "/data"]

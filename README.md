@@ -28,7 +28,7 @@ A plug-and-play shell for building **interactive learning playbooks**: a single 
 - **Split layout**: lesson content on the left; an always-available playground on the right, showing **1 or 2 code panes** per exercise (two independent processes — enough for client/server labs).
 - **Three gated section types**: reading (mark-as-done), inline quiz (perfect score), exercise (regex checks over real program output). Chapters close with a summary, glossary, and final quiz.
 - **Real code execution** through a pty: unbuffered interactive stdio, an `args:` box, stdin input, process-group cleanup.
-- **Multi-toolchain**: `c`, `cpp`, `python`, `node`, `kotlin` (Kotlin CLI), `java` — per pane.
+- **Toolchains as data**: the playground is language-agnostic — `content/toolchains.json` says how each pane builds and runs (shell commands). Presets: `c`, `cpp`, `python`, `node`, `kotlin` (Kotlin CLI), `java`, `rust`, `rust-cargo`; add your own for make, Gradle, a Python venv with libraries, and so on.
 - **Multilingual content** via `.vi.md` / `.en.md` file pairs (any locale set), with a runtime language switcher.
 - **Progress persistence** in SQLite (pure-Go driver — no CGO), per-playbook via `app_id`.
 - **Sample solutions** behind a disclosure, with copy-into-editor and a completion fallback.
@@ -37,21 +37,29 @@ A plug-and-play shell for building **interactive learning playbooks**: a single 
 ## Requirements
 
 - Go ≥ 1.26 to build.
-- Per-toolchain runtimes only for the languages your exercises use (see [Toolchains](#toolchains)) — the `playbook-setup-env` skill installs exactly what your curriculum needs.
+- Only the toolchains your exercises use (see [Toolchains](#toolchains)) — the `playbook-setup-env` skill defines, installs and verifies exactly what your curriculum needs.
 - macOS or Linux (Windows: see [roadmap](#platform-support--roadmap)).
 
 ## Quick start
 
 ```bash
-# 1. Copy the template
-cp -R play-book-template my-playbook && cd my-playbook
+# 1. Copy the template — without its git history and built binary
+rsync -a --exclude .git --exclude /playbook play-book-template/ my-playbook/
+cd my-playbook && git init
 
-# 2. Make it yours: app_id, brand, tagline, port, locales, default_toolchain
+# 2. Make it yours FIRST: a unique app_id (it names the data dir and the
+#    toolchain environment) and port; then brand, tagline, locales, default_toolchain
 $EDITOR content/course.json
 
-# 3. Build & run
+# 3. Install & check the toolchains the demo uses (skip what's already installed)
+sh env/setup-macos.sh c python        # or env/setup-debian.sh on Linux
+go run . toolchains verify c python
+
+# 4. Build & run
 go build -o my-playbook . && ./my-playbook
 ```
+
+With the agent flow (below), start your Claude session inside `my-playbook/`, so the bundled skills and `go run .` resolve against the new playbook; `playbook-plan` picks the `app_id` and port for you.
 
 The demo chapter (`content/chapters/ch01/`) shows every content type working — including a two-pane exercise mixing Python and C. Delete it once your real chapters exist.
 
@@ -61,9 +69,9 @@ The intended flow is agent-driven, as one chain or as separate steps:
 
 | Step | Skill | What it does |
 |------|-------|--------------|
-| all-in-one | `playbook-bootstrap` | chains the three steps below; you only approve at the gates |
+| all-in-one | `playbook-bootstrap` | chains the three steps below; you only approve at the gates (plan + installs + setup-coordinator model, then the auto-mode brief) |
 | 1. plan | `playbook-plan` | reads `document-sources/`, proposes a chapter/section syllabus + **toolchain scope** as `curriculum.md` for your approval |
-| 2. environment | `playbook-setup-env` | installs & verifies **only** the toolchains the plan scopes |
+| 2. environment | `playbook-setup-env` | defines (`content/toolchains.json`), installs, records (`env/`) & verifies **only** the toolchains the plan scopes |
 | 3. content | `playbook-generate` | writes chapters (manual: one per invocation; auto: parallel sub-agents with a pre-flight brief you approve) |
 
 Manual authoring works too: follow the schemas in `.claude/skills/playbook-generate/reference.md`, then rebuild.
@@ -81,15 +89,24 @@ All in `content/course.json`:
 | `port` | this playbook's default port (`--port` overrides) |
 | `locales`, `default_locale` | content languages, fallback order |
 
-Runtime flags: `--port`, `--host` (default `127.0.0.1`; `0.0.0.0` for Docker/LAN), `--data` (data dir), `--no-open`.
+Runtime flags: `--port`, `--host` (default `127.0.0.1`; `0.0.0.0` for Docker/LAN), `--data` (data dir), `--env-dir` (toolchain environment, see [Toolchains](#toolchains)), `--no-open`.
+
+Authoring CLI (run as `go run . <command>` while authoring — it checks the content on disk):
+
+| Command | What it does |
+|---------|--------------|
+| `toolchains list` | defined toolchains, installed or missing, and `ENV_DIR` |
+| `toolchains verify [name...]` | runs each toolchain's scratch program through the real runner and prints its output |
+| `exercises verify [chNN[/id]...]` | runs every exercise's solution (must pass all checks) and starter (must fail one) exactly like the Run button, and evaluates the checks |
+| `content lint` | JSON, per-locale files, quiz answer/choice parity, correct-answer-never-longest, missing starter/solution files, check patterns, emoji |
 
 ## Project structure
 
 ```
-main.go                  # flags, embed, data dir, serve
+main.go                  # flags, embed, data dir, serve; `toolchains` CLI
 internal/
   content/   # manifest + localized markdown/JSON loading
-  runner/    # toolchain registry; compile & run in a pty
+  runner/    # language-agnostic: stage files, run toolchains.json commands in a pty
   server/    # HTTP API + playground WebSocket
   store/     # SQLite progress/settings/attempts
 web/         # SPA (vanilla JS + CodeMirror + highlight.js, vendored)
@@ -97,10 +114,15 @@ web/         # SPA (vanilla JS + CodeMirror + highlight.js, vendored)
   vendor/verdant/        # Elevated Botanical M3 tokens (generated CSS, verbatim)
   styles.css             # shell styles — colours/type/shape only via token vars
   code-theme.css         # One Dark Vivid Italic syntax for editor + code blocks
+env/
+  setup-macos.sh         # environment recipes per toolchain (local)
+  setup-debian.sh        # … and for hosts; the Dockerfile runs it
 content/
   course.json            # manifest (see Configuration)
+  toolchains.json        # how panes build & run (see Toolchains)
   chapters/chNN/         # sections/, quizzes/, exercises.json,
-                         # starter/, solution/, summary, glossary, quiz, assets/
+                         # starter/<exercise-id>/, solution/<exercise-id>/,
+                         # summary, glossary, quiz, assets/
 ```
 
 ## Theming
@@ -126,20 +148,60 @@ Dark values go on `:root`, and light values go under `[data-theme="light"]`. Run
 
 ## Toolchains
 
-| Name | Compile | Run |
-|------|---------|-----|
-| `c` | `cc -Wall -Wextra -O0` | `./prog` |
-| `cpp` | `c++ -std=c++17 -Wall -Wextra -O0` | `./prog` |
-| `python` | — | `python3 -u <entry>` |
-| `node` | — | `node <entry>` |
-| `kotlin` | `kotlinc … -d prog.jar` | `kotlin -classpath prog.jar <MainKt>` (`.kts`: `kotlinc -script`) |
-| `java` | `javac -d .` | `java <Main>` |
+The playground is only an interface: it stages a pane's files, runs a toolchain's `build` then `run` shell commands in a pty, and forwards args and stdin. **Which toolchains exist, and what they can use, is up to the environment** — your machine locally, the image when hosted — and the `playbook-setup-env` skill sets that up.
 
-Each pane declares its `toolchain` in `exercises.json` (first file listed = entry point); omitted panes use `default_toolchain` or extension inference. `/api/course` reports which toolchains are installed. Adding a language = one entry in `internal/runner/runner.go` + a CodeMirror mode in `web/vendor/` + an `EXT_META` line in `web/app.js`.
+A toolchain is an entry in `content/toolchains.json`:
+
+```json
+{
+  "name": "cpp-make", "label": "C++ (make)", "detect": ["make", "c++"],
+  "sources": ["*.cpp"], "stage": ["*.hpp", "Makefile"],
+  "layout": { "*.hpp": "include" }, "workspace": "persistent",
+  "env": { "CXXFLAGS": "-std=c++17 -Wall -Iinclude" },
+  "build": "make -s prog",
+  "run": "exec ./prog \"$@\"",
+  "scratch": [{ "name": "main.cpp", "content": "…" }, { "name": "Makefile", "content": "…" }]
+}
+```
+
+Commands see `$ENTRY` (first source file of the pane), `$SRCS`, and `$ENV_DIR` — the playbook's private environment for venvs, libraries and prefetched dependencies (`--env-dir`, else `$PLAYBOOK_ENV_DIR`, else `<data>/env`; its `bin/` is first on `PATH`). `workspace: "persistent"` keeps a pane's build directory between Runs so make/cargo/gradle stay incremental. `detect` can also name paths (`$ENV_DIR/venv`), so a toolchain whose private environment was never set up shows as missing. Program output reaches the terminal and the checks with colour escape codes removed. Full schema and patterns: [`playbook-generate/reference.md`](.claude/skills/playbook-generate/reference.md#toolchainsjson).
+
+Presets shipped with the template:
+
+| Name | Build | Run |
+|------|-------|-----|
+| `c` | `cc -Wall -Wextra -O0 -o prog $SRCS` | `./prog` |
+| `cpp` | `c++ -std=c++17 -Wall -Wextra -O0 -o prog $SRCS` | `./prog` |
+| `python` | — | `python3 -u $ENTRY` |
+| `node` | — | `node $ENTRY` |
+| `kotlin` | `kotlinc $SRCS -d prog.jar` | `kotlin -classpath prog.jar <MainKt>` (`.kts`: `kotlinc -script`) |
+| `java` | `javac -d . $SRCS` | `java <Main>` |
+| `rust` | `rustc --edition 2021 -o prog $ENTRY` (other `.rs` files load via `mod`) | `./prog` |
+| `rust-cargo` | `cargo build --offline` (Cargo layout: `.rs` → `src/`) | `cargo run --offline` |
+
+Each pane declares its `toolchain` in `exercises.json` (first file listed = entry point); omitted panes use `default_toolchain` or inference (first definition whose `sources` match). `/api/course` reports which toolchains are installed. Adding a toolchain = an entry in `toolchains.json` + a recipe case in `env/setup-*.sh`; no Go changes. `content/` is embedded, so an edited `toolchains.json` needs a rebuild + restart; installing a tool doesn't (detection runs on every Run).
+
+A pane that fails with *toolchain not installed* or *unknown toolchain* means the environment or the definition is missing: run the `playbook-setup-env` skill, or by hand `sh env/setup-<os>.sh <name>` then `go run . toolchains verify <name>`. Editor highlighting is per file extension (`EXT_META` in `web/app.js` + a CodeMirror mode in `web/vendor/`); unknown extensions edit as plain text.
 
 ## Bundled skills (`.claude/skills/`)
 
-`playbook-bootstrap` (the chain), `playbook-plan` (curriculum + toolchain scope), `playbook-setup-env` (scoped installs, verified with the runner's own commands), `playbook-generate` (content; auto mode shows a pre-flight brief — task→model table **and the sub-agent verification criteria** — before spawning anything). Schemas live in `playbook-generate/reference.md`.
+| Skill | Role |
+|-------|------|
+| `playbook-bootstrap` | the whole chain; the session acts as **PM** — talks to you, holds the gates, delegates, checks results |
+| `playbook-plan` | `curriculum.md`: syllabus + toolchain/environment scope; approving it approves the installs |
+| `playbook-setup-env` | **setup coordinator**: writes toolchain definitions + recipes, hands installs to workers, re-verifies with `toolchains verify` |
+| `playbook-generate` | content; auto mode shows a pre-flight brief — task→model table **and the sub-agent verification criteria** — before spawning anything |
+
+Under `playbook-bootstrap` the work is delegated hierarchically, and results travel back push-only — each level verifies its children and reports once to its parent; no level polls or watches another:
+
+```
+PM (the session — prefer Fable / Opus)
+├── setup coordinator    opus preferred, or sonnet — proposed by the PM, confirmed by you
+│   └── install workers  haiku for plain installs, sonnet when a sub-task may need troubleshooting
+└── chapter writers      opus / sonnet by task
+```
+
+Roles, model tiers and the reporting protocol live in one file, `playbook-bootstrap/agents.md`; content schemas in `playbook-generate/reference.md`.
 
 ## Self-hosting with Docker
 
@@ -150,20 +212,21 @@ docker build --build-arg TOOLCHAINS="c python" -t my-playbook .
 docker run -p 4360:4360 -v playbook-data:/data my-playbook
 ```
 
-`TOOLCHAINS` installs only what your curriculum scopes. The container runs as a non-root user and binds `0.0.0.0` **inside the container** only. ⚠️ The playground executes arbitrary code by design and the app has **no authentication or per-user separation** — one container = one learner (or a trusted household). Don't expose it to the public internet.
+Inside the container the app always listens on 4360, whatever `course.json`'s `port` says; choose the host side with `-p <host-port>:4360`. `TOOLCHAINS` installs only what your curriculum scopes (`playbook-setup-env` keeps the Dockerfile's default in sync), using the recipes in `env/setup-debian.sh` (presets plus whatever `playbook-setup-env` added for your own toolchains); `$ENV_DIR` is baked into the image at `/opt/playbook-env` and owned by the app user. The container runs as a non-root user and binds `0.0.0.0` **inside the container** only. ⚠️ The playground executes arbitrary code by design and the app has **no authentication or per-user separation** — one container = one learner (or a trusted household). Don't expose it to the public internet.
 
 ## Backend contract (stable interfaces)
 
-The backend is deliberately small (~900 lines), and the frontend + all content depend on only three stable surfaces. Keep them intact and the backend can evolve freely — or even be reimplemented in another stack — without touching any playbook's content:
+The backend is deliberately small (~1.8k lines of Go), and the frontend + all content depend on only four stable surfaces. Keep them intact and the backend can evolve freely — or even be reimplemented in another stack — without touching any playbook's content:
 
-1. **HTTP API**: `/api/course`, `/api/section/{ch}/{id}`, `/api/progress`, `/api/chapter/{ch}/{summary,glossary,quiz[/{id}]}`, `/api/quiz/...{attempt,attempts}`, `/api/exercises/{ch}`, `/api/settings`, `/assets/{ch}/{name}` — same JSON shapes (see `internal/server/server.go`; note: quiz endpoints strip `answer`).
-2. **WebSocket** `/ws/run`: in `{op: run|stdin|kill, toolchain, files, args, data}` / out `{type: out|status|exit|error, data, code}`, one program per socket, pty semantics, process-group kill.
+1. **HTTP API**: `/api/course` (incl. `toolchains` availability + `toolchain_defs` name/label/scratch), `/api/section/{ch}/{id}`, `/api/progress`, `/api/chapter/{ch}/{summary,glossary,quiz[/{id}]}`, `/api/quiz/...{attempt,attempts}`, `/api/exercises/{ch}` (files per exercise in `exercise_files`), `/api/settings`, `/assets/{ch}/{name}` — same JSON shapes (see `internal/server/server.go`; note: quiz endpoints strip `answer`).
+2. **WebSocket** `/ws/run`: in `{op: run|stdin|kill, toolchain, pane, files, args, data}` (`pane` optional: keys the persistent workspace) / out `{type: out|status|exit|error, data, code}`, one program per socket, pty semantics, process-group kill.
 3. **Storage**: SQLite tables in `internal/store/store.go`; progress keys `chNN/<section-id>` must survive any change.
+4. **Toolchain definitions**: the `content/toolchains.json` schema — fields, `/bin/sh -c` execution with args as `"$@"`, the `$ENTRY` / `$SRCS` / `$ENV_DIR` variables, `$ENV_DIR/bin` first on `PATH` (see `internal/runner/runner.go`).
 
 ## Platform support & roadmap
 
 - **macOS / Linux**: supported (pty + process-group semantics are POSIX).
-- **Windows**: not native yet — the runner leans on Unix ptys and `kill(-pid)`. Works fine under **WSL2** today. Native support (ConPTY + Job Objects) is a roadmap item; the toolchain registry is the only code that needs it.
+- **Windows**: not native yet — the runner leans on Unix ptys and `kill(-pid)`. Works fine under **WSL2** today. Native support (ConPTY + Job Objects, and a shell other than `/bin/sh` for toolchain commands) is a roadmap item; `internal/runner` is the only code that needs it.
 - Roadmap ideas: editor autocomplete, notes/highlights, search, flashcards, per-playbook pane layouts.
 
 ## Content licensing

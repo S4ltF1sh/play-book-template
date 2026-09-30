@@ -17,6 +17,6 @@ Every chapter ends with a **Summary & Glossary** and a final **Quiz**.
 - Each exercise ships 1 or 2 code panes, depending on the use case. The two panes run **independently** — enough to simulate client/server.
 - Code runs **for real on your machine** through a pty: type input in the bottom box, pass arguments in the `args:` box.
 - The **Scratch** tab is always available for quick experiments.
-- The template supports multiple toolchains: `c`, `cpp`, `python`, `node`, `kotlin`, `java` — each pane declares its own toolchain in `exercises.json`.
+- Toolchains are data: `content/toolchains.json` says how each pane builds and runs. The template ships presets (`c`, `cpp`, `python`, `node`, `kotlin`, `java`, `rust`, `rust-cargo`) and a playbook can add its own (make, Gradle, a Python venv, …) — each pane declares its toolchain in `exercises.json`.
 
 > Try it now: head to the quiz and then the exercise in the next sections — you'll pass through all three unlock mechanisms.
